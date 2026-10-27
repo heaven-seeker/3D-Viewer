@@ -1,17 +1,16 @@
 #pragma once
 
-#include "webgpu/webgpu_cpp.h"
-#include "glfw3webgpu.h"
-#include "Mesh.hpp"
 #include "Camera.hpp"
-
+#include "Mesh.hpp"
+#include "glfw3webgpu.h"
+#include "webgpu/webgpu_cpp.h"
 
 namespace C2Lux {
 
 class UILayer;
 
 class Renderer {
-public:
+   public:
     Renderer();
     // Persistent device callbacks refer to this renderer's address.
     Renderer(const Renderer&) = delete;
@@ -37,11 +36,14 @@ public:
 
     wgpu::TextureView getNextSurfaceViewData();
 
-    void draw(UILayer& ui, const Camera& camera);
+    void draw(UILayer& ui, const Camera& camera, const Mesh& mesh);
 
     void drawJustUI(UILayer& ui);
 
-private:
+   private:
+    bool updateMaterialBuffer(const Mesh& model);
+    uint32_t getMaterialOffset(int materialId) const;
+
     wgpu::Instance instance;
     wgpu::Device device;
     wgpu::Adapter adapter;
@@ -57,15 +59,21 @@ private:
     wgpu::Buffer indexBuffer;
     size_t indexBufferSize = 1024;
     uint32_t indexCount = 0;
-    
+
     wgpu::Buffer uniformBuffer;
     wgpu::Buffer lightBuffer;
     std::vector<wgpu::BindGroupLayout> bindGroupLayouts;
     wgpu::PipelineLayout pipelineLayout;
     std::vector<wgpu::BindGroup> bindGroups;
 
+    // Slot 0 is white; material i occupies slot i + 1 in this shared buffer.
+    wgpu::Buffer m_materialBuffer;
+    wgpu::BindGroup m_materialBindGroup;
+    uint32_t m_materialStride = 0;
+    size_t m_materialCount = 0;
+
     wgpu::RenderPipeline renderPipeline;
-   
+
     wgpu::Sampler sampler;
 
     wgpu::Texture depthTexture;
@@ -76,19 +84,18 @@ private:
     wgpu::TextureViewDescriptor depthTextureViewDescriptor;
     wgpu::TextureFormat depthTextureFormat;
 
-    
-
-public:
+   public:
     const wgpu::Instance& getInstance() const { return instance; }
     const wgpu::Device& getDevice() const { return device; }
     wgpu::TextureFormat getSurfaceFormat() const { return surfaceFormat; }
 
     // Process asynchronous callbacks even when the window is minimized.
-    void processEvents() { if (instance) instance.ProcessEvents(); }
+    void processEvents() {
+        if (instance) instance.ProcessEvents();
+    }
     bool hasFailed() const { return failed; }
 
     wgpu::SurfaceConfiguration surfaceConfig{};
-
 };
 
-} // namespace C2Lux
+}  // namespace C2Lux

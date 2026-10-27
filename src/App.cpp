@@ -1,20 +1,21 @@
 #include "App.hpp"
+
+#include "ResourceManager.hpp"
 #include "glfw3webgpu.h"
 #include "imgui.h"
-#include "ResourceManager.hpp"
 #include "nfd.h"
 
 // std
+#include <iomanip>
 #include <iostream>
-#include <iomanip> 
-
 
 void printMatrix(const std::string& name, const glm::mat4& m) {
     std::cout << "=== " << name << " ===" << std::endl;
     for (int row = 0; row < 4; ++row) {
         std::cout << "[ ";
         for (int col = 0; col < 4; ++col) {
-            std::cout << std::setw(8) << std::fixed << std::setprecision(2) << m[col][row] << " ";
+            std::cout << std::setw(8) << std::fixed << std::setprecision(2)
+                      << m[col][row] << " ";
         }
         std::cout << "]" << std::endl;
     }
@@ -22,16 +23,19 @@ void printMatrix(const std::string& name, const glm::mat4& m) {
 }
 
 namespace C2Lux {
-    
-App::~App() {
-    uiLayer.destroy();
-}
 
-App::App(std::unique_ptr<Window> window) : mainWindow(std::move(window)), appState(AppState::Startup), bisRunning(true) {}
+App::~App() { uiLayer.destroy(); }
+
+App::App(std::unique_ptr<Window> window)
+    : mainWindow(std::move(window)),
+      appState(AppState::Startup),
+      bisRunning(true) {}
 
 bool App::initWebGPU() {
     if (!renderer.initInstance()) return false;
-    if (!renderer.setSurface(glfwGetWGPUSurface(renderer.getInstance().Get(), mainWindow->getGLFWwindow()))) return false;
+    if (!renderer.setSurface(glfwGetWGPUSurface(renderer.getInstance().Get(),
+                                                mainWindow->getGLFWwindow())))
+        return false;
     if (!renderer.initAdapter()) return false;
     if (!renderer.initDevice()) return false;
     if (!renderer.initQueue()) return false;
@@ -39,14 +43,16 @@ bool App::initWebGPU() {
     const auto [width, height] = mainWindow->getFramebufferSize();
     if (!renderer.setupSurfaceConfig(width, height)) return false;
 
-    wgpu::ShaderModule shader = ResourceManager::getInstance().loadShaderModule("shader.wgsl", renderer.getDevice());
+    wgpu::ShaderModule shader = ResourceManager::getInstance().loadShaderModule(
+        "shader.wgsl", renderer.getDevice());
     if (!shader) return false;
 
     renderer.initBuffers();
     renderer.initBindGroups();
     renderer.initRenderPipeline(shader);
 
-    if (!uiLayer.init(mainWindow->getGLFWwindow(), renderer.getDevice(), renderer.getSurfaceFormat())) {
+    if (!uiLayer.init(mainWindow->getGLFWwindow(), renderer.getDevice(),
+                      renderer.getSurfaceFormat())) {
         std::cerr << "Could not initialize UI Layer!" << std::endl;
         return false;
     }
@@ -59,18 +65,23 @@ void App::processInput(float deltaTime) {
     ImGuiIO& io = ImGui::GetIO();
 
     if (!io.WantCaptureKeyboard) {
-        if (glfwGetKey(mainWindow->getGLFWwindow(), GLFW_KEY_W) == GLFW_PRESS) camera.moveForward(deltaTime);
-        if (glfwGetKey(mainWindow->getGLFWwindow(), GLFW_KEY_S) == GLFW_PRESS) camera.moveBackward(deltaTime);
-        if (glfwGetKey(mainWindow->getGLFWwindow(), GLFW_KEY_A) == GLFW_PRESS) camera.moveLeft(deltaTime);
-        if (glfwGetKey(mainWindow->getGLFWwindow(), GLFW_KEY_D) == GLFW_PRESS) camera.moveRight(deltaTime);
+        if (glfwGetKey(mainWindow->getGLFWwindow(), GLFW_KEY_W) == GLFW_PRESS)
+            camera.moveForward(deltaTime);
+        if (glfwGetKey(mainWindow->getGLFWwindow(), GLFW_KEY_S) == GLFW_PRESS)
+            camera.moveBackward(deltaTime);
+        if (glfwGetKey(mainWindow->getGLFWwindow(), GLFW_KEY_A) == GLFW_PRESS)
+            camera.moveLeft(deltaTime);
+        if (glfwGetKey(mainWindow->getGLFWwindow(), GLFW_KEY_D) == GLFW_PRESS)
+            camera.moveRight(deltaTime);
         if (glfwGetKey(mainWindow->getGLFWwindow(), GLFW_KEY_P) == GLFW_PRESS) {
             printMatrix("\nView Matrix", camera.getViewMatrix());
-            printMatrix("Projection", camera.getProjectionMatrix(1920.0f / 1080.0f));
+            printMatrix("Projection",
+                        camera.getProjectionMatrix(1920.0f / 1080.0f));
         }
 
-
         static bool f11WasPressed = false;
-        bool f11IsPressed = glfwGetKey(mainWindow->getGLFWwindow(), GLFW_KEY_F11) == GLFW_PRESS;
+        bool f11IsPressed =
+            glfwGetKey(mainWindow->getGLFWwindow(), GLFW_KEY_F11) == GLFW_PRESS;
 
         if (f11IsPressed && !f11WasPressed) {
             mainWindow->toggleFullscreen();
@@ -87,7 +98,8 @@ void App::processInput(float deltaTime) {
         static double lastX = 0.0, lastY = 0.0;
         static bool isDragging = false;
 
-        if (glfwGetMouseButton(mainWindow->getGLFWwindow(), GLFW_MOUSE_BUTTON_RIGHT) == GLFW_PRESS) {
+        if (glfwGetMouseButton(mainWindow->getGLFWwindow(),
+                               GLFW_MOUSE_BUTTON_RIGHT) == GLFW_PRESS) {
             double xpos, ypos;
             glfwGetCursorPos(mainWindow->getGLFWwindow(), &xpos, &ypos);
 
@@ -95,21 +107,19 @@ void App::processInput(float deltaTime) {
                 lastX = xpos;
                 lastY = ypos;
                 isDragging = true;
-            }
-            else {
-                camera.rotate(static_cast<float>(xpos - lastX), static_cast<float>(ypos - lastY));
+            } else {
+                camera.rotate(static_cast<float>(xpos - lastX),
+                              static_cast<float>(ypos - lastY));
                 lastX = xpos;
                 lastY = ypos;
             }
-        }
-        else {
+        } else {
             isDragging = false;
         }
     }
 }
 
-void App::renderFrame()
-{
+void App::renderFrame() {
     float deltaTime = getDeltaTime();
 
     if (uiLayer.needsRebuild()) {
@@ -128,26 +138,28 @@ void App::renderFrame()
     uiLayer.beginFrame();
 
     switch (appState) {
-    case AppState::Startup: {
-        std::string path = uiLayer.buildStartupUI();
-        if (!path.empty()) {
-            appState = AppState::Viewing;
-            renderer.updateMeshBuffers(ResourceManager::getInstance().loadObj(path));
+        case AppState::Startup: {
+            std::string path = uiLayer.buildStartupUI();
+            if (!path.empty()) {
+                appState = AppState::Viewing;
+                currentMesh = ResourceManager::getInstance().loadObj(path);
+                renderer.updateMeshBuffers(currentMesh);
+            }
+            renderer.drawJustUI(uiLayer);
+            break;
         }
-        renderer.drawJustUI(uiLayer);
-        break;
-    }
 
-    case AppState::Viewing: {
-        processInput(deltaTime);
+        case AppState::Viewing: {
+            processInput(deltaTime);
 
-        std::string path = uiLayer.buildUI();
-        if (!path.empty()) {
-            renderer.updateMeshBuffers(ResourceManager::getInstance().loadObj(path));
+            std::string path = uiLayer.buildUI();
+            if (!path.empty()) {
+                currentMesh = ResourceManager::getInstance().loadObj(path);
+                renderer.updateMeshBuffers(currentMesh);
+            }
+            renderer.draw(uiLayer, camera, currentMesh);
+            break;
         }
-        renderer.draw(uiLayer, camera);
-        break;
-    }
     }
 }
 
@@ -179,8 +191,7 @@ void App::mainLoop() {
     renderFrame();
 }
 
-bool App::handleWindowEvents()
-{
+bool App::handleWindowEvents() {
     mainWindow->pollEvents();
     auto [width, height] = mainWindow->getFramebufferSize();
     if (width <= 0 || height <= 0) {
@@ -196,8 +207,7 @@ bool App::handleWindowEvents()
     return true;
 }
 
-float App::getDeltaTime() const
-{
+float App::getDeltaTime() const {
     static double lastFrame = 0.0;
     double currentFrame = glfwGetTime();
     float deltaTime = static_cast<float>(currentFrame - lastFrame);
@@ -206,4 +216,4 @@ float App::getDeltaTime() const
     return deltaTime;
 }
 
-} // namespace C2Lux
+}  // namespace C2Lux

@@ -1,22 +1,19 @@
 #pragma once
 
-#include "Window.hpp"
+#include "Camera.hpp"
+#include "Mesh.hpp"
 #include "Renderer.hpp"
 #include "UILayer.hpp"
-#include "Camera.hpp"
+#include "Window.hpp"
 
 // std
 #include <memory>
 
-
 namespace C2Lux {
 
 class App {
-public:
-    enum class AppState {
-        Startup,
-        Viewing
-    };
+   public:
+    enum class AppState { Startup, Viewing };
 
     ~App();
     App(std::unique_ptr<Window> window);
@@ -28,23 +25,25 @@ public:
 
     bool handleWindowEvents();
 
-private:
+   private:
     std::unique_ptr<Window> mainWindow;
     Renderer renderer;
     UILayer uiLayer;
     Camera camera;
     AppState appState;
+
     bool bisRunning;
 
     void processInput(float deltaTime);
     void renderFrame();
-public:
+
+   public:
     float getDeltaTime() const;
+
+    Mesh currentMesh;
 
     AppState getAppState() const { return appState; }
     void setAppState(AppState newState) { appState = newState; }
 };
 
-
-
-} // namespace C2Lux
+}  // namespace C2Lux

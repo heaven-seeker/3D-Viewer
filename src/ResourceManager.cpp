@@ -133,10 +133,9 @@ Mesh ResourceManager::loadObj(std::string_view objFileName) {
                     };
                 }
 
-                if (faceMaterialId >= 0) {
-                    vertex.color = { materials[faceMaterialId].diffuse[0], materials[faceMaterialId].diffuse[1], materials[faceMaterialId].diffuse[2] };
-                }
-                else if (!attrib.colors.empty()) {
+                // Material color is supplied separately for each draw. Keep
+                // actual vertex colors, or white as a neutral multiplier.
+                if (!attrib.colors.empty()) {
                     vertex.color = {
                         attrib.colors[3 * idx.vertex_index + 0],
                         attrib.colors[3 * idx.vertex_index + 1],

@@ -15,6 +15,10 @@ struct LightData {
     specularStrength: f32,
 };
 
+struct MaterialUniforms {
+    baseColor: vec4f,
+};
+
 const pi: f32 = 3.14159265359;
 
 struct VertexInput {
@@ -52,6 +56,7 @@ fn vs_main(model: VertexInput) -> VertexOutput {
 }
 
 @group(1) @binding(0) var<uniform> lightData: LightData;
+@group(2) @binding(0) var<uniform> material: MaterialUniforms;
 
 @fragment
 fn fs_main(in: VertexOutput) -> @location(0) vec4<f32> {
@@ -66,6 +71,7 @@ fn fs_main(in: VertexOutput) -> @location(0) vec4<f32> {
     let diffuse = max(dot(normal, lightDir), 0.0);
 
 
-    let finalColor =  (lightData.ambient + (diffuse + lightData.specularStrength * specular) * lightData.intensity) * in.color;
+    let baseColor = in.color * material.baseColor.rgb;
+    let finalColor =  (lightData.ambient + (diffuse + lightData.specularStrength * specular) * lightData.intensity) * baseColor;
     return vec4<f32>(finalColor, 1.0);
 }
