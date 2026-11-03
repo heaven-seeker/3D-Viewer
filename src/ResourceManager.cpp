@@ -127,7 +127,7 @@ ObjLoadResult ResourceManager::loadObj(std::string_view objFileName) {
             // Start a new submesh when the material changes
             if (materialId != currentMaterialId && indexCount > 0) {
                 subMeshes.push_back(
-                    {startIndex, indexCount, currentMaterialId});
+                    {shape.name, startIndex, indexCount, currentMaterialId});
 
                 startIndex = static_cast<uint32_t>(indexData.size());
                 indexCount = 0;
@@ -201,7 +201,8 @@ ObjLoadResult ResourceManager::loadObj(std::string_view objFileName) {
         }
 
         if (indexCount > 0) {
-            subMeshes.push_back({startIndex, indexCount, currentMaterialId});
+            subMeshes.push_back(
+                {shape.name, startIndex, indexCount, currentMaterialId});
         }
     }
 
@@ -227,8 +228,9 @@ ObjLoadResult ResourceManager::loadObj(std::string_view objFileName) {
 
     ObjLoadResult result{};
 
-    result.mesh.emplace(std::move(vertexData), std::move(indexData),
-                        std::move(subMeshes), std::move(parsedMaterials));
+    result.mesh.emplace(path.stem().string(), std::move(vertexData),
+                        std::move(indexData), std::move(subMeshes),
+                        std::move(parsedMaterials));
 
     result.warning = std::move(warn);
     return result;

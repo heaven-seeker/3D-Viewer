@@ -14,8 +14,8 @@ struct VertexAttributes {
 };
 
 struct SubMesh {
+    std::string name;
     uint32_t startIndex;
-    ;
     uint32_t indexCount;
     int materialId;
 };
@@ -36,13 +36,17 @@ class Mesh {
    public:
     Mesh() = default;
 
-    Mesh(std::vector<VertexAttributes> vertices, std::vector<uint32_t> indices,
-         std::vector<SubMesh> subMeshes, std::vector<Material> materials);
+    Mesh(std::string name, std::vector<VertexAttributes> vertices,
+         std::vector<uint32_t> indices, std::vector<SubMesh> subMeshes,
+         std::vector<Material> materials);
 
     bool setMaterialColor(uint32_t materialId, const glm::vec3& color);
     bool setMaterial(uint32_t materialId, const Material& material);
 
+    bool validate() const;
+
    private:
+    std::string m_name;
     std::vector<VertexAttributes> m_vertexData;
     std::vector<uint32_t> m_indexData;
     std::vector<SubMesh> m_subMeshes;
@@ -55,6 +59,8 @@ class Mesh {
     const std::vector<uint32_t>& getIndexData() const { return m_indexData; }
     const std::vector<SubMesh>& getSubMeshes() const { return m_subMeshes; }
     const std::vector<Material>& getMaterials() const { return m_materials; }
+
+    const std::string& getName() const { return m_name; }
 };
 
 }  // namespace C2Lux

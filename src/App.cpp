@@ -146,6 +146,8 @@ void App::renderFrame() {
 
                 if (!result.mesh) {
                     std::cerr << result.error << '\n';
+                } else if (!result.mesh->validate()) {
+                    std::cerr << "Loaded mesh failed validation\n";
                 } else {
                     m_appState = AppState::Viewing;
                     m_currentMesh = std::move(*result.mesh);
@@ -166,6 +168,8 @@ void App::renderFrame() {
 
                 if (!result.mesh) {
                     std::cerr << result.error << '\n';
+                } else if (!result.mesh->validate()) {
+                    std::cerr << "Loaded mesh failed validation\n";
                 } else {
                     m_currentMesh = std::move(*result.mesh);
                     m_renderer.updateMeshBuffers(m_currentMesh);
