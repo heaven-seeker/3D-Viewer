@@ -17,6 +17,9 @@ struct LightData {
 
 struct MaterialUniforms {
     baseColor: vec4f,
+    specularColor: vec3f,
+    specularStrength: f32,
+    shininess: f32,
 };
 
 const pi: f32 = 3.14159265359;
@@ -60,18 +63,31 @@ fn vs_main(model: VertexInput) -> VertexOutput {
 
 @fragment
 fn fs_main(in: VertexOutput) -> @location(0) vec4<f32> {
-    let ambientOcclusion = 0.1f;
+    let baseColor = in.color * material.baseColor.rgb * uniforms.color.rgb;
+
     let normal = normalize(in.normal);
     let lightDir = normalize(lightData.direction);
 
     let viewDir = normalize(uniforms.cameraPosition - in.worldPos);
     let reflectDir = reflect(-lightDir, normal);
 
-    let specular = pow(max(dot(viewDir, reflectDir), 0.0), lightData.shininess);
     let diffuse = max(dot(normal, lightDir), 0.0);
 
+    var specular = 0.0;
+    if (diffuse > 0.0) {
+        specular = pow(
+            max(dot(viewDir, reflectDir), 0.0),
+            max(material.shininess, 1.0)
+        );
+    }
 
-    let baseColor = in.color * material.baseColor.rgb;
-    let finalColor =  (lightData.ambient + (diffuse + lightData.specularStrength * specular) * lightData.intensity) * baseColor;
+
+    let diffuseTerm = baseColor * diffuse;
+    let specularTerm =
+        material.specularColor * material.specularStrength * specular;
+
+    let finalColor = baseColor * lightData.ambient
+        + (diffuseTerm + specularTerm) * lightData.intensity;
+
     return vec4<f32>(finalColor, 1.0);
 }

@@ -19,4 +19,13 @@ bool Mesh::setMaterialColor(uint32_t materialId, const glm::vec3& color) {
     return true;
 }
 
+bool Mesh::setMaterial(uint32_t materialId, const Material& material) {
+    if (materialId >= m_materials.size()) {
+        return false;
+    }
+
+    m_materials[materialId] = material;
+    return true;
+}
+
 }  // namespace C2Lux

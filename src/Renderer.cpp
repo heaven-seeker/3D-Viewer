@@ -494,8 +494,13 @@ bool Renderer::updateMaterialBuffer(const Mesh& model) {
     MaterialUniforms uniforms{};
     std::memcpy(data.data(), &uniforms, sizeof(uniforms));
     for (size_t i = 0; i < materialCount; ++i) {
-        uniforms.baseColor =
-            glm::vec4(model.getMaterials()[i].diffuseColor, 1.0f);
+        const Material& material = model.getMaterials()[i];
+
+        uniforms.baseColor = glm::vec4(material.diffuseColor, 1.0f);
+        uniforms.shininess = material.shininess;
+        uniforms.specularStrength = material.specularStrength;
+        uniforms.specularColor = material.specularColor;
+
         std::memcpy(data.data() + (i + 1) * m_materialStride, &uniforms,
                     sizeof(uniforms));
     }
@@ -539,6 +544,9 @@ bool Renderer::updateMaterial(uint32_t materialId, const Material& material) {
 
     MaterialUniforms uniforms{};
     uniforms.baseColor = glm::vec4(material.diffuseColor, 1.0f);
+    uniforms.shininess = material.shininess;
+    uniforms.specularStrength = material.specularStrength;
+    uniforms.specularColor = material.specularColor;
 
     const uint64_t offset =
         (static_cast<uint64_t>(materialId) + 1) * m_materialStride;

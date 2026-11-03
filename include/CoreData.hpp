@@ -25,8 +25,15 @@ struct LightData {
 // Only numeric GPU data belongs here; Material keeps the CPU-side metadata.
 struct alignas(16) MaterialUniforms {
     glm::vec4 baseColor{1.0f};
+
+    glm::vec3 specularColor{1.0f};
+    float specularStrength = 0.5f;
+
+    float shininess = 32.f;
+
+    float _pad[3];
 };
 
 static_assert(sizeof(Uniforms) % 16 == 0);
 static_assert(sizeof(LightData) % 16 == 0);
-static_assert(sizeof(MaterialUniforms) == 16);
+static_assert(sizeof(MaterialUniforms) % 16 == 0);

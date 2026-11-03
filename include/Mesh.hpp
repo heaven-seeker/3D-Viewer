@@ -22,8 +22,12 @@ struct SubMesh {
 
 struct Material {
     std::string name;
-    glm::vec3 diffuseColor{1.0f, 1.0f, 1.0f};
     std::string diffuseTexture;
+
+    glm::vec3 diffuseColor{1.0f, 1.0f, 1.0f};
+    glm::vec3 specularColor{1.0f};
+    float specularStrength = 0.5f;
+    float shininess = 32.0f;
 };
 
 namespace C2Lux {
@@ -36,6 +40,7 @@ class Mesh {
          std::vector<SubMesh> subMeshes, std::vector<Material> materials);
 
     bool setMaterialColor(uint32_t materialId, const glm::vec3& color);
+    bool setMaterial(uint32_t materialId, const Material& material);
 
    private:
     std::vector<VertexAttributes> m_vertexData;

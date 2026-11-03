@@ -218,6 +218,9 @@ ObjLoadResult ResourceManager::loadObj(std::string_view objFileName) {
         material.name = tinyMat.name;
         material.diffuseColor = {tinyMat.diffuse[0], tinyMat.diffuse[1],
                                  tinyMat.diffuse[2]};
+        material.shininess = tinyMat.shininess;
+        material.specularColor = {tinyMat.specular[0], tinyMat.specular[1],
+                                  tinyMat.specular[2]};
 
         parsedMaterials.push_back(std::move(material));
     }

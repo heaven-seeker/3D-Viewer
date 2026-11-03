@@ -319,14 +319,22 @@ std::optional<uint32_t> UILayer::drawMaterialEditor(Mesh& mesh) {
     // Edit the selected material
     const uint32_t materialId = static_cast<uint32_t>(m_selectedMaterialId);
 
-    glm::vec3 color = materials[materialId].diffuseColor;
-
     std::optional<uint32_t> changedMaterial;
+    Material edited = materials[materialId];
+    bool changed = false;
 
-    if (ImGui::ColorEdit3("Base Color", &color.x)) {
-        if (mesh.setMaterialColor(materialId, color)) {
-            changedMaterial = materialId;
-        }
+    changed |= ImGui::ColorEdit3("Base Color", &edited.diffuseColor.x);
+
+    changed |= ImGui::ColorEdit3("Specular Color", &edited.specularColor.x);
+
+    changed |= ImGui::SliderFloat("Specular Strength", &edited.specularStrength,
+                                  0.0f, 1.0f);
+
+    changed |=
+        ImGui::SliderFloat("Shininess", &edited.shininess, 1.0f, 1000.0f);
+
+    if (changed && mesh.setMaterial(materialId, edited)) {
+        changedMaterial = materialId;
     }
 
     ImGui::End();
