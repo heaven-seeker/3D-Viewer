@@ -11,8 +11,6 @@ struct LightData {
     direction: vec3<f32>,
     ambient: f32,
     intensity: f32,
-    shininess: f32,
-    specularStrength: f32,
 };
 
 struct MaterialUniforms {
@@ -49,7 +47,6 @@ fn vs_main(model: VertexInput) -> VertexOutput {
 
     out.clip_position = mvp * vec4<f32>(model.position, 1.0);
     
-    //out.color = uniforms.color.xyz;
     out.color = model.color;
     out.uv = model.uv;
     out.normal = model.normal;

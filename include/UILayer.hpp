@@ -36,19 +36,15 @@ class UILayer {
     inline void resetMaterialSelection() { m_selectedMaterialId = -1; }
 
     glm::vec4 m_backgroundColor = {0.1f, 0.1f, 0.1f, 1.0f};
-    glm::vec4 m_modelColor = {0.8f, 0.8f, 0.8f, 1.0f};
+    glm::vec4 m_modelTint = {1.0f, 1.0f, 1.0f, 1.0f};
 
     // Light data
     float m_lightDirection[3] = {1.0f, 1.0f, 1.0f};
     float m_ambientStrength = 0.1f;
     float m_lightIntensity = 0.2f;
-    float m_shininess = 10.f;
-    float m_specularStrength = 0.1f;
 
-    bool m_fullscreen = false;
     bool m_exitToMenuRequested = false;
     bool m_exitRequested = false;
-    bool m_fullscreenFlag = false;
 
    private:
     bool m_nfdInitialized = false;

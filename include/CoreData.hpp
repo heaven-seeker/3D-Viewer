@@ -2,6 +2,8 @@
 
 #include "glm/glm.hpp"
 
+#include <cstddef>
+
 inline constexpr float PI = 3.14159265358979323846;
 
 struct Uniforms {
@@ -13,13 +15,11 @@ struct Uniforms {
     float time;
 };
 
-struct LightData {
+struct alignas(16) LightData {
     glm::vec3 direction;
     float ambient;
     float intensity;
-    float shininess;
-    float specularStrength;
-    float _pad;
+    float _pad[3]{};
 };
 
 // Only numeric GPU data belongs here; Material keeps the CPU-side metadata.
@@ -31,9 +31,13 @@ struct alignas(16) MaterialUniforms {
 
     float shininess = 32.f;
 
-    float _pad[3];
+    float _pad[3]{};
 };
 
 static_assert(sizeof(Uniforms) % 16 == 0);
-static_assert(sizeof(LightData) % 16 == 0);
-static_assert(sizeof(MaterialUniforms) % 16 == 0);
+static_assert(sizeof(LightData) == 32);
+static_assert(offsetof(LightData, intensity) == 16);
+static_assert(sizeof(MaterialUniforms) == 48);
+static_assert(offsetof(MaterialUniforms, specularColor) == 16);
+static_assert(offsetof(MaterialUniforms, specularStrength) == 28);
+static_assert(offsetof(MaterialUniforms, shininess) == 32);

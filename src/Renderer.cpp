@@ -256,16 +256,14 @@ void Renderer::draw(UILayer& ui, const Camera& camera, const Mesh& mesh) {
                    static_cast<float>(m_surfaceConfig.height);
     uniforms.projectionMatrix = camera.getProjectionMatrix(aspect);
     uniforms.cameraPosition = camera.getPosition();
-    uniforms.color = {ui.m_modelColor.x, ui.m_modelColor.y, ui.m_modelColor.z,
-                      ui.m_modelColor.w};
+    uniforms.color = {ui.m_modelTint.x, ui.m_modelTint.y, ui.m_modelTint.z,
+                      ui.m_modelTint.w};
 
     LightData lightData{};
     lightData.direction = {ui.m_lightDirection[0], ui.m_lightDirection[1],
                            ui.m_lightDirection[2]};
     lightData.ambient = ui.m_ambientStrength;
     lightData.intensity = ui.m_lightIntensity;
-    lightData.shininess = ui.m_shininess;
-    lightData.specularStrength = ui.m_specularStrength;
 
     m_queue.WriteBuffer(m_lightBuffer, 0, &lightData, sizeof(LightData));
     m_queue.WriteBuffer(m_uniformBuffer, 0, &uniforms, sizeof(Uniforms));

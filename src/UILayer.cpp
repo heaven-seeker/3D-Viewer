@@ -110,13 +110,10 @@ std::string UILayer::buildUI() {
     ImGui::DragFloat3("Light Direction", m_lightDirection, 0.01f);
     ImGui::DragFloat("Ambient Strength", &m_ambientStrength, 0.001f);
     ImGui::DragFloat("Intensity", &m_lightIntensity, 0.001f);
-    ImGui::DragFloat("Shininess", &m_shininess, 1.f, 0.f, 128.f);
-    ImGui::DragFloat("Specular Strength", &m_specularStrength, 0.001f);
     ImGui::SeparatorText("Material & Environment");
     ImGui::ColorEdit3("Background Color", &m_backgroundColor.x);
-    ImGui::ColorEdit3("Model Color", &m_modelColor.x);
+    ImGui::ColorEdit3("Model Tint", &m_modelTint.x);
 
-    ImVec2 oldCursorPos = ImGui::GetCursorPos();
     const float buttonWidth = 120.0f;
     const float buttonHeight = 40.0f;
 
@@ -260,11 +257,8 @@ void UILayer::buildSettingsBlock() {
     ImGui::Separator();
     ImGui::Spacing();
 
-    // ImGui::Checkbox("FullScreen", &m_fullscreenFlag);
-
     if (ImGui::Button("Confirm")) {
         m_needsRebuild = true;
-        m_fullscreen = m_fullscreenFlag;
     };
 
     ImGui::EndChild();
