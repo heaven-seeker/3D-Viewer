@@ -532,6 +532,22 @@ uint32_t Renderer::getMaterialOffset(int materialId) const {
     return (static_cast<uint32_t>(materialId) + 1) * m_materialStride;
 }
 
+bool Renderer::updateMaterial(uint32_t materialId, const Material& material) {
+    if (!m_materialBuffer || materialId >= m_materialCount) {
+        return false;
+    }
+
+    MaterialUniforms uniforms{};
+    uniforms.baseColor = glm::vec4(material.diffuseColor, 1.0f);
+
+    const uint64_t offset =
+        (static_cast<uint64_t>(materialId) + 1) * m_materialStride;
+
+    m_queue.WriteBuffer(m_materialBuffer, offset, &uniforms, sizeof(uniforms));
+
+    return true;
+}
+
 void Renderer::updateMeshBuffers(const Mesh& model) {
     if (!updateMaterialBuffer(model)) {
         m_hasFailed = true;

@@ -1,20 +1,24 @@
 #pragma once
 
-#include "webgpu/webgpu_cpp.h"
 #include "GLFW/glfw3.h"
 #include "glm/glm.hpp"
+#include "webgpu/webgpu_cpp.h"
 
 // std
+#include <optional>
 #include <string>
 
 namespace C2Lux {
 
+class Mesh;
+
 class UILayer {
-public:
+   public:
     UILayer() = default;
     ~UILayer();
 
-    bool init(GLFWwindow* window, wgpu::Device device, wgpu::TextureFormat targetFormat);
+    bool init(GLFWwindow* window, wgpu::Device device,
+              wgpu::TextureFormat targetFormat);
 
     void destroy();
 
@@ -27,12 +31,15 @@ public:
     void buildSettingsBlock();
 
     void draw(wgpu::RenderPassEncoder renderPass);
+    std::optional<uint32_t> drawMaterialEditor(Mesh& mesh);
 
-    glm::vec4 m_backgroundColor = { 0.1f, 0.1f, 0.1f, 1.0f };
-    glm::vec4 m_modelColor = { 0.8f, 0.8f, 0.8f, 1.0f };
+    inline void resetMaterialSelection() { m_selectedMaterialId = -1; }
+
+    glm::vec4 m_backgroundColor = {0.1f, 0.1f, 0.1f, 1.0f};
+    glm::vec4 m_modelColor = {0.8f, 0.8f, 0.8f, 1.0f};
 
     // Light data
-    float m_lightDirection[3] = { 1.0f, 1.0f, 1.0f };
+    float m_lightDirection[3] = {1.0f, 1.0f, 1.0f};
     float m_ambientStrength = 0.1f;
     float m_lightIntensity = 0.2f;
     float m_shininess = 10.f;
@@ -43,17 +50,18 @@ public:
     bool m_exitRequested = false;
     bool m_fullscreenFlag = false;
 
-private:
+   private:
     bool m_nfdInitialized = false;
     bool m_glfwInitialized = false;
     bool m_webgpuInitialized = false;
+    int m_selectedMaterialId = -1;
 
     unsigned int m_fontSize = 16.f;
     float m_uiScale = 2.1f;
     bool m_needsRebuild = false;
 
-public:
+   public:
     bool needsRebuild() const { return m_needsRebuild; }
 };
 
-} // namespace C2Lux
+}  // namespace C2Lux

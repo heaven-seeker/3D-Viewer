@@ -215,7 +215,7 @@ ObjLoadResult ResourceManager::loadObj(std::string_view objFileName) {
     for (const auto& tinyMat : materials) {
         Material material{};
 
-        material.name;
+        material.name = tinyMat.name;
         material.diffuseColor = {tinyMat.diffuse[0], tinyMat.diffuse[1],
                                  tinyMat.diffuse[2]};
 

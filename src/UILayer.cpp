@@ -1,5 +1,7 @@
 #include "UILayer.hpp"
 
+#include <Mesh.hpp>
+
 #include "backends/imgui_impl_glfw.h"
 #include "backends/imgui_impl_wgpu.h"
 #include "imgui.h"
@@ -271,6 +273,64 @@ void UILayer::buildSettingsBlock() {
 void UILayer::draw(wgpu::RenderPassEncoder renderPass) {
     ImGui::Render();
     ImGui_ImplWGPU_RenderDrawData(ImGui::GetDrawData(), renderPass.Get());
+}
+
+std::optional<uint32_t> UILayer::drawMaterialEditor(Mesh& mesh) {
+    const auto& materials = mesh.getMaterials();
+
+    ImGui::Begin("Materials");
+
+    if (materials.empty()) {
+        ImGui::TextDisabled("No materials available");
+        ImGui::End();
+        return std::nullopt;
+    }
+
+    // Select the first material by default
+    if (m_selectedMaterialId < 0 ||
+        static_cast<std::size_t>(m_selectedMaterialId) >= materials.size()) {
+        m_selectedMaterialId = 0;
+    }
+
+    const char* preview = materials[m_selectedMaterialId].name.c_str();
+
+    // Material selection
+    if (ImGui::BeginCombo("Material", preview)) {
+        for (std::size_t i = 0; i < materials.size(); ++i) {
+            ImGui::PushID(static_cast<int>(i));
+
+            const bool selected =
+                static_cast<std::size_t>(m_selectedMaterialId) == i;
+
+            if (ImGui::Selectable(materials[i].name.c_str(), selected)) {
+                m_selectedMaterialId = static_cast<int>(i);
+            }
+
+            if (selected) {
+                ImGui::SetItemDefaultFocus();
+            }
+
+            ImGui::PopID();
+        }
+
+        ImGui::EndCombo();
+    }
+
+    // Edit the selected material
+    const uint32_t materialId = static_cast<uint32_t>(m_selectedMaterialId);
+
+    glm::vec3 color = materials[materialId].diffuseColor;
+
+    std::optional<uint32_t> changedMaterial;
+
+    if (ImGui::ColorEdit3("Base Color", &color.x)) {
+        if (mesh.setMaterialColor(materialId, color)) {
+            changedMaterial = materialId;
+        }
+    }
+
+    ImGui::End();
+    return changedMaterial;
 }
 
 }  // namespace C2Lux

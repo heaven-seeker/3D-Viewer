@@ -35,6 +35,8 @@ class Mesh {
     Mesh(std::vector<VertexAttributes> vertices, std::vector<uint32_t> indices,
          std::vector<SubMesh> subMeshes, std::vector<Material> materials);
 
+    bool setMaterialColor(uint32_t materialId, const glm::vec3& color);
+
    private:
     std::vector<VertexAttributes> m_vertexData;
     std::vector<uint32_t> m_indexData;

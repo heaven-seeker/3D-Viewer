@@ -150,6 +150,7 @@ void App::renderFrame() {
                     m_appState = AppState::Viewing;
                     m_currentMesh = std::move(*result.mesh);
                     m_renderer.updateMeshBuffers(m_currentMesh);
+                    m_uiLayer.resetMaterialSelection();
                 }
             }
             m_renderer.drawJustUI(m_uiLayer);
@@ -168,8 +169,19 @@ void App::renderFrame() {
                 } else {
                     m_currentMesh = std::move(*result.mesh);
                     m_renderer.updateMeshBuffers(m_currentMesh);
+                    m_uiLayer.resetMaterialSelection();
                 }
             }
+
+            if (auto changedId = m_uiLayer.drawMaterialEditor(m_currentMesh)) {
+                const Material& material =
+                    m_currentMesh.getMaterials()[*changedId];
+
+                if (!m_renderer.updateMaterial(*changedId, material)) {
+                    std::cerr << "Can't change material" << '\n';
+                };
+            }
+
             m_renderer.draw(m_uiLayer, m_camera, m_currentMesh);
             break;
         }

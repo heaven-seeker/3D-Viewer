@@ -40,6 +40,8 @@ class Renderer {
 
     void drawJustUI(UILayer& ui);
 
+    bool updateMaterial(uint32_t materialId, const Material& material);
+
    private:
     bool updateMaterialBuffer(const Mesh& model);
     uint32_t getMaterialOffset(int materialId) const;

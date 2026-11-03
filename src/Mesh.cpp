@@ -10,4 +10,13 @@ Mesh::Mesh(std::vector<VertexAttributes> vertices,
       m_subMeshes(std::move(subMeshes)),
       m_materials(std::move(materials)) {}
 
+bool Mesh::setMaterialColor(uint32_t materialId, const glm::vec3& color) {
+    if (materialId >= m_materials.size()) {
+        return false;
+    }
+
+    m_materials[materialId].diffuseColor = color;
+    return true;
+}
+
 }  // namespace C2Lux
