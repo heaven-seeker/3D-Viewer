@@ -3,9 +3,8 @@
 #include "glm/glm.hpp"
 
 // std
-#include <vector>
 #include <string>
-
+#include <vector>
 
 struct VertexAttributes {
     glm::vec3 position;
@@ -15,35 +14,40 @@ struct VertexAttributes {
 };
 
 struct SubMesh {
-    uint32_t startIndex;;
+    uint32_t startIndex;
+    ;
     uint32_t indexCount;
     int materialId;
 };
 
 struct Material {
-    glm::vec3 diffuseColor{ 1.0f, 1.0f, 1.0f };
+    std::string name;
+    glm::vec3 diffuseColor{1.0f, 1.0f, 1.0f};
     std::string diffuseTexture;
 };
 
 namespace C2Lux {
 
 class Mesh {
-public:
+   public:
     Mesh() = default;
 
-    Mesh(std::vector<VertexAttributes> vertices, std::vector<uint32_t> indices, std::vector<SubMesh> subMeshes, std::vector<Material> materials);
+    Mesh(std::vector<VertexAttributes> vertices, std::vector<uint32_t> indices,
+         std::vector<SubMesh> subMeshes, std::vector<Material> materials);
 
-private:
-    std::vector<VertexAttributes> vertexData;
-    std::vector<uint32_t> indexData;
-    std::vector<SubMesh> subMeshes;
-    std::vector<Material> materials;
-public:
-    const std::vector<VertexAttributes>& getVertexData() const { return vertexData; }
-    const std::vector<uint32_t>& getIndexData() const { return indexData; }
-    const std::vector<SubMesh>& getSubMeshes() const { return subMeshes; }
-    const std::vector<Material>& getMaterials() const { return materials; }
+   private:
+    std::vector<VertexAttributes> m_vertexData;
+    std::vector<uint32_t> m_indexData;
+    std::vector<SubMesh> m_subMeshes;
+    std::vector<Material> m_materials;
+
+   public:
+    const std::vector<VertexAttributes>& getVertexData() const {
+        return m_vertexData;
+    }
+    const std::vector<uint32_t>& getIndexData() const { return m_indexData; }
+    const std::vector<SubMesh>& getSubMeshes() const { return m_subMeshes; }
+    const std::vector<Material>& getMaterials() const { return m_materials; }
 };
 
-
-} // namespace C2Lux
+}  // namespace C2Lux

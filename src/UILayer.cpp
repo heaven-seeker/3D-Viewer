@@ -16,13 +16,13 @@ bool UILayer::init(GLFWwindow* window, wgpu::Device device,
                    wgpu::TextureFormat targetFormat) {
     IMGUI_CHECKVERSION();
     ImGui::CreateContext();
-    nfdInitialized = NFD_Init() == NFD_OKAY;
-    if (!nfdInitialized) {
+    m_nfdInitialized = NFD_Init() == NFD_OKAY;
+    if (!m_nfdInitialized) {
         destroy();
         return false;
     }
-    glfwInitialized = ImGui_ImplGlfw_InitForOther(window, true);
-    if (!glfwInitialized) {
+    m_glfwInitialized = ImGui_ImplGlfw_InitForOther(window, true);
+    if (!m_glfwInitialized) {
         destroy();
         return false;
     }
@@ -31,8 +31,8 @@ bool UILayer::init(GLFWwindow* window, wgpu::Device device,
     initInfo.Device = device.Get();
     initInfo.NumFramesInFlight = 3;
     initInfo.RenderTargetFormat = static_cast<WGPUTextureFormat>(targetFormat);
-    webgpuInitialized = ImGui_ImplWGPU_Init(&initInfo);
-    if (!webgpuInitialized) {
+    m_webgpuInitialized = ImGui_ImplWGPU_Init(&initInfo);
+    if (!m_webgpuInitialized) {
         destroy();
         return false;
     }
@@ -42,9 +42,9 @@ bool UILayer::init(GLFWwindow* window, wgpu::Device device,
 
     float xScale, yScale;
     glfwGetWindowContentScale(window, &xScale, &yScale);
-    currentScale = xScale;
+    m_uiScale = xScale;
 
-    float perfectFontSize = fontSize * currentScale;
+    float perfectFontSize = m_fontSize * m_uiScale;
 
     const std::string fontPath = std::string(FONT_DIR) + "/Roboto-Black.ttf";
     ImFont* font =
@@ -54,7 +54,7 @@ bool UILayer::init(GLFWwindow* window, wgpu::Device device,
         io.Fonts->AddFontDefault();
     }
 
-    ImGui::GetStyle().ScaleAllSizes(currentScale * 2.f);
+    ImGui::GetStyle().ScaleAllSizes(m_uiScale * 2.f);
     ImGui::GetStyle().ButtonTextAlign = ImVec2(0.5f, 0.5f);
 
     return true;
@@ -62,14 +62,14 @@ bool UILayer::init(GLFWwindow* window, wgpu::Device device,
 
 void UILayer::destroy() {
     if (ImGui::GetCurrentContext()) {
-        if (webgpuInitialized) ImGui_ImplWGPU_Shutdown();
-        if (glfwInitialized) ImGui_ImplGlfw_Shutdown();
+        if (m_webgpuInitialized) ImGui_ImplWGPU_Shutdown();
+        if (m_glfwInitialized) ImGui_ImplGlfw_Shutdown();
         ImGui::DestroyContext();
     }
-    webgpuInitialized = false;
-    glfwInitialized = false;
-    if (nfdInitialized) NFD_Quit();
-    nfdInitialized = false;
+    m_webgpuInitialized = false;
+    m_glfwInitialized = false;
+    if (m_nfdInitialized) NFD_Quit();
+    m_nfdInitialized = false;
 }
 
 void UILayer::beginFrame() {
@@ -105,14 +105,14 @@ std::string UILayer::buildUI() {
 
     ImGui::Spacing();
     ImGui::SeparatorText("Light Data");
-    ImGui::DragFloat3("Light Direction", lightDirection, 0.01f);
-    ImGui::DragFloat("Ambient Occlusion", &ambientOcclusion, 0.001f);
-    ImGui::DragFloat("Intensity", &intensity, 0.001f);
-    ImGui::DragFloat("Shininess", &shininess, 1.f, 0.f, 128.f);
-    ImGui::DragFloat("Specular Strength", &specularStrength, 0.001f);
+    ImGui::DragFloat3("Light Direction", m_lightDirection, 0.01f);
+    ImGui::DragFloat("Ambient Strength", &m_ambientStrength, 0.001f);
+    ImGui::DragFloat("Intensity", &m_lightIntensity, 0.001f);
+    ImGui::DragFloat("Shininess", &m_shininess, 1.f, 0.f, 128.f);
+    ImGui::DragFloat("Specular Strength", &m_specularStrength, 0.001f);
     ImGui::SeparatorText("Material & Environment");
-    ImGui::ColorEdit3("Background Color", &bgColor.x);
-    ImGui::ColorEdit3("Model Color", &modelColor.x);
+    ImGui::ColorEdit3("Background Color", &m_backgroundColor.x);
+    ImGui::ColorEdit3("Model Color", &m_modelColor.x);
 
     ImVec2 oldCursorPos = ImGui::GetCursorPos();
     const float buttonWidth = 120.0f;
@@ -126,7 +126,7 @@ std::string UILayer::buildUI() {
     }
 
     if (ImGui::Button("Exit To Menu", ImVec2(buttonWidth, buttonHeight))) {
-        exitMenu = true;
+        m_exitToMenuRequested = true;
     }
 
     ImGui::End();
@@ -141,12 +141,12 @@ std::string UILayer::buildStartupUI() {
     ImGui::SetNextWindowPos(viewport->Pos);
     ImGui::SetNextWindowSize(viewport->Size);
 
-    ImGuiWindowFlags window_flags =
+    ImGuiWindowFlags windowFlags =
         ImGuiWindowFlags_NoTitleBar | ImGuiWindowFlags_NoResize |
         ImGuiWindowFlags_NoMove | ImGuiWindowFlags_NoCollapse |
         ImGuiWindowFlags_NoScrollbar | ImGuiWindowFlags_NoBringToFrontOnFocus;
 
-    ImGui::Begin("MainMenu", nullptr, window_flags);
+    ImGui::Begin("MainMenu", nullptr, windowFlags);
 
     ImVec2 menuBlockSize = ImVec2(800.0f, 250.0f);
     ImVec2 windowSize = ImGui::GetWindowSize();
@@ -195,7 +195,7 @@ std::string UILayer::buildStartupUI() {
     }
 
     if (switcher) {
-        buildSettingBlock();
+        buildSettingsBlock();
     }
 
     // Exit
@@ -208,7 +208,7 @@ std::string UILayer::buildStartupUI() {
     ImGui::SetCursorPos(ImVec2(posX, posY));
 
     if (ImGui::Button("Exit", ImVec2(buttonWidth, buttonHeight))) {
-        exit = true;
+        m_exitRequested = true;
     }
 
     ImGui::End();
@@ -217,14 +217,14 @@ std::string UILayer::buildStartupUI() {
 }
 
 void UILayer::rebuildFontsAndScale() {
-    bNeedsRebuild = false;
+    m_needsRebuild = false;
     ImGuiIO& io = ImGui::GetIO();
 
     ImGui_ImplWGPU_InvalidateDeviceObjects();
 
     io.Fonts->Clear();
 
-    float perfectFontSize = fontSize * currentScale;
+    float perfectFontSize = m_fontSize * m_uiScale;
 
     const std::string fontPath = std::string(FONT_DIR) + "/Roboto-Black.ttf";
     ImFont* font =
@@ -237,32 +237,32 @@ void UILayer::rebuildFontsAndScale() {
 
     ImGui::GetStyle() = ImGuiStyle();
     ImGui::StyleColorsDark();
-    ImGui::GetStyle().ScaleAllSizes(currentScale);
+    ImGui::GetStyle().ScaleAllSizes(m_uiScale);
 }
 
-void UILayer::buildSettingBlock() {
+void UILayer::buildSettingsBlock() {
     ImVec2 settingMenuBlockSize = ImVec2{800.0f, 400.0f};
     ImGui::BeginChild("SettingsChild", settingMenuBlockSize, false,
                       ImGuiWindowFlags_NoBackground);
     ImGui::Text("UI Settings");
 
     unsigned int step = 1;
-    unsigned int step_fast = 10;
-    ImGui::InputScalar("Font size", ImGuiDataType_U32, &fontSize, &step,
-                       &step_fast, "%u");
+    unsigned int fastStep = 10;
+    ImGui::InputScalar("Font size", ImGuiDataType_U32, &m_fontSize, &step,
+                       &fastStep, "%u");
 
     ImGui::Spacing();
-    ImGui::SliderFloat("Interface scale", &currentScale, 0.5f, 3.0f, "%.1f");
+    ImGui::SliderFloat("Interface scale", &m_uiScale, 0.5f, 3.0f, "%.1f");
 
     ImGui::Spacing();
     ImGui::Separator();
     ImGui::Spacing();
 
-    // ImGui::Checkbox("FullScreen", &fullScreenFlag);
+    // ImGui::Checkbox("FullScreen", &m_fullscreenFlag);
 
     if (ImGui::Button("Confirm")) {
-        bNeedsRebuild = true;
-        fullScreen = fullScreenFlag;
+        m_needsRebuild = true;
+        m_fullscreen = m_fullscreenFlag;
     };
 
     ImGui::EndChild();

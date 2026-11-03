@@ -17,7 +17,7 @@ public:
     Window(Window&& other) noexcept;
     Window& operator=(Window&& other) noexcept;
 
-    static std::unique_ptr<Window> create(int width_, int height_, std::string name_);
+    static std::unique_ptr<Window> create(int width, int height, std::string title);
     bool shouldClose();
     void pollEvents();
     void toggleFullscreen();
@@ -25,29 +25,29 @@ public:
     float getAndResetScrollDelta();
 
 private:
-    Window(GLFWwindow* window_);
+    Window(GLFWwindow* window);
 
-    GLFWwindow* window;
-    int height;
-    int width;
+    GLFWwindow* m_window;
+    int m_height;
+    int m_width;
 
-    bool isFullscreen = false;
-    int savedX = 0, savedY = 0;
-    int savedWidth = 0, savedHeight = 0;
+    bool m_isFullscreen = false;
+    int m_savedX = 0, m_savedY = 0;
+    int m_savedWidth = 0, m_savedHeight = 0;
 
-    bool framebufferResized = false;
-    std::string name;
-    float scrollDelta = 0.0f;
+    bool m_framebufferResized = false;
+    std::string m_title;
+    float m_scrollDelta = 0.0f;
    
 
 public:
-    GLFWwindow* getGLFWwindow() const { return window; }
-    int getWidth() const { return width; }
-    int getHeight() const { return height; }
+    GLFWwindow* getGLFWwindow() const { return m_window; }
+    int getWidth() const { return m_width; }
+    int getHeight() const { return m_height; }
 
-    bool hasResized() const { return framebufferResized; }
-    void setResized(bool resized) { framebufferResized = resized; } 
-    void setScrollDelta(float delta) { scrollDelta = delta; }
+    bool hasResized() const { return m_framebufferResized; }
+    void setResized(bool resized) { m_framebufferResized = resized; }
+    void setScrollDelta(float delta) { m_scrollDelta = delta; }
 
     std::pair<int, int> getFramebufferSize();
 

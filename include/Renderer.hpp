@@ -28,13 +28,13 @@ class Renderer {
     void initSampler();
     void initBindGroups();
 
-    bool setSurface(WGPUSurface c_surface);
+    bool setSurface(WGPUSurface nativeSurface);
     bool setupSurfaceConfig(int width, int height);
-    void resizeSwapchain(int width, int height);
+    void resizeSurface(int width, int height);
 
     void updateMeshBuffers(const Mesh& model);
 
-    wgpu::TextureView getNextSurfaceViewData();
+    wgpu::TextureView acquireSurfaceTextureView();
 
     void draw(UILayer& ui, const Camera& camera, const Mesh& mesh);
 
@@ -44,27 +44,27 @@ class Renderer {
     bool updateMaterialBuffer(const Mesh& model);
     uint32_t getMaterialOffset(int materialId) const;
 
-    wgpu::Instance instance;
-    wgpu::Device device;
-    wgpu::Adapter adapter;
-    wgpu::Queue queue;
-    wgpu::Surface surface;
-    wgpu::TextureFormat surfaceFormat;
+    wgpu::Instance m_instance;
+    wgpu::Device m_device;
+    wgpu::Adapter m_adapter;
+    wgpu::Queue m_queue;
+    wgpu::Surface m_surface;
+    wgpu::TextureFormat m_surfaceFormat;
 
-    bool failed = false;
+    bool m_hasFailed = false;
 
-    wgpu::Buffer vertexBuffer;
-    size_t vertexBufferSize = 1024;
+    wgpu::Buffer m_vertexBuffer;
+    size_t m_vertexBufferCapacity = 1024;
 
-    wgpu::Buffer indexBuffer;
-    size_t indexBufferSize = 1024;
-    uint32_t indexCount = 0;
+    wgpu::Buffer m_indexBuffer;
+    size_t m_indexBufferCapacity = 1024;
+    uint32_t m_indexCount = 0;
 
-    wgpu::Buffer uniformBuffer;
-    wgpu::Buffer lightBuffer;
-    std::vector<wgpu::BindGroupLayout> bindGroupLayouts;
-    wgpu::PipelineLayout pipelineLayout;
-    std::vector<wgpu::BindGroup> bindGroups;
+    wgpu::Buffer m_uniformBuffer;
+    wgpu::Buffer m_lightBuffer;
+    std::vector<wgpu::BindGroupLayout> m_bindGroupLayouts;
+    wgpu::PipelineLayout m_pipelineLayout;
+    std::vector<wgpu::BindGroup> m_bindGroups;
 
     // Slot 0 is white; material i occupies slot i + 1 in this shared buffer.
     wgpu::Buffer m_materialBuffer;
@@ -72,30 +72,30 @@ class Renderer {
     uint32_t m_materialStride = 0;
     size_t m_materialCount = 0;
 
-    wgpu::RenderPipeline renderPipeline;
+    wgpu::RenderPipeline m_renderPipeline;
 
-    wgpu::Sampler sampler;
+    wgpu::Sampler m_sampler;
 
-    wgpu::Texture depthTexture;
-    wgpu::Texture msaaTexture;
-    wgpu::TextureView msaaTextureView;
-    wgpu::TextureView depthTextureView;
-    wgpu::TextureDescriptor depthTextureDescriptor;
-    wgpu::TextureViewDescriptor depthTextureViewDescriptor;
-    wgpu::TextureFormat depthTextureFormat;
+    wgpu::Texture m_depthTexture;
+    wgpu::Texture m_msaaTexture;
+    wgpu::TextureView m_msaaTextureView;
+    wgpu::TextureView m_depthTextureView;
+    wgpu::TextureDescriptor m_depthTextureDescriptor;
+    wgpu::TextureViewDescriptor m_depthTextureViewDescriptor;
+    wgpu::TextureFormat m_depthTextureFormat;
 
    public:
-    const wgpu::Instance& getInstance() const { return instance; }
-    const wgpu::Device& getDevice() const { return device; }
-    wgpu::TextureFormat getSurfaceFormat() const { return surfaceFormat; }
+    const wgpu::Instance& getInstance() const { return m_instance; }
+    const wgpu::Device& getDevice() const { return m_device; }
+    wgpu::TextureFormat getSurfaceFormat() const { return m_surfaceFormat; }
 
     // Process asynchronous callbacks even when the window is minimized.
     void processEvents() {
-        if (instance) instance.ProcessEvents();
+        if (m_instance) m_instance.ProcessEvents();
     }
-    bool hasFailed() const { return failed; }
+    bool hasFailed() const { return m_hasFailed; }
 
-    wgpu::SurfaceConfiguration surfaceConfig{};
+    wgpu::SurfaceConfiguration m_surfaceConfig{};
 };
 
 }  // namespace C2Lux

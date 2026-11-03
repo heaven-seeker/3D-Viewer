@@ -27,3 +27,7 @@ resources/*
 Thumbs.db
 imgui.ini
 docs/
+
+*.rar
+
+temp/

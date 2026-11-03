@@ -8,26 +8,32 @@
 
 // std
 #include <fstream>
+#include <iostream>
+#include <limits>
 #include <sstream>
 #include <string>
-#include <iostream>
-
+#include <unordered_map>
+#include <utility>
 
 bool operator==(const VertexAttributes& a, const VertexAttributes& b) {
-    return a.position == b.position && a.normal == b.normal && a.uv == b.uv && a.color == b.color;
+    return a.position == b.position && a.normal == b.normal && a.uv == b.uv &&
+           a.color == b.color;
 }
 
 namespace C2Lux {
 
-ResourceManager::ResourceManager(std::filesystem::path sPath, std::filesystem::path oPath) : shaderPath(sPath), objPath(oPath) {}
+ResourceManager::ResourceManager(std::filesystem::path shaderDirectory,
+                                 std::filesystem::path objDirectory)
+    : m_shaderDirectory(shaderDirectory), m_objDirectory(objDirectory) {}
 
-
-wgpu::ShaderModule ResourceManager::loadShaderModule(std::string_view shaderName, wgpu::Device device) {
-    const auto path = shaderPath / shaderName;
+wgpu::ShaderModule ResourceManager::loadShaderModule(
+    std::string_view shaderName, wgpu::Device device) {
+    const auto path = m_shaderDirectory / shaderName;
     std::ifstream file(path);
 
     if (!file.is_open()) {
-        std::cerr << "Error: Can't open shader code file at: " << path.string() << std::endl;
+        std::cerr << "Error: Can't open shader code file at: " << path.string()
+                  << std::endl;
         return nullptr;
     }
 
@@ -49,13 +55,10 @@ wgpu::ShaderModule ResourceManager::loadShaderModule(std::string_view shaderName
     return device.CreateShaderModule(&shaderDesc);
 }
 
-Mesh ResourceManager::loadObj(std::string_view objFileName) {
-
-    const auto path = objPath / objFileName;
-
-    auto mtlPath = path.parent_path().string() + "/";
-
-
+ObjLoadResult ResourceManager::loadObj(std::string_view objFileName) {
+    const auto path = m_objDirectory / objFileName;
+    const std::string objPath = path.string();
+    const std::string mtlPath = path.parent_path().string() + "/";
 
     tinyobj::attrib_t attrib;
     std::vector<tinyobj::shape_t> shapes;
@@ -64,25 +67,22 @@ Mesh ResourceManager::loadObj(std::string_view objFileName) {
     std::string warn;
     std::string err;
 
-    bool ret = tinyobj::LoadObj(&attrib, &shapes, &materials, &warn, &err, path.string().c_str(), mtlPath.c_str());
-    std::cout << "Materials loaded: " << materials.size() << std::endl;
-    
-    std::cout << path.string() << std::endl;
-    std::cout << mtlPath << std::endl;
+    const auto fail = [&](std::string message) -> ObjLoadResult {
+        ObjLoadResult result{};
+        result.error = std::move(message);
+        result.warning = warn;
+        return result;
+    };
 
-    if (!warn.empty()) {
-        std::cout << warn << std::endl;
+    const auto validIndex = [](int index, size_t dataSize, size_t components) {
+        return index >= 0 && static_cast<size_t>(index) < dataSize / components;
+    };
+
+    // Parse and triangulate OBJ
+    if (!tinyobj::LoadObj(&attrib, &shapes, &materials, &warn, &err,
+                          objPath.c_str(), mtlPath.c_str(), true)) {
+        return fail(err.empty() ? "Failed to load OBJ" : err);
     }
-
-    if (!err.empty()) {
-        std::cerr << err << std::endl;
-    }
-
-    if (!ret) {
-        // WARN: need return nullptr
-        return Mesh();
-    }
-
 
     std::vector<VertexAttributes> vertexData;
     std::vector<uint32_t> indexData;
@@ -91,91 +91,144 @@ Mesh ResourceManager::loadObj(std::string_view objFileName) {
     std::unordered_map<VertexAttributes, uint32_t, VertexHasher> uniqueVertices;
 
     for (const auto& shape : shapes) {
+        const auto& mesh = shape.mesh;
+        const size_t faceCount = mesh.num_face_vertices.size();
+
+        // Validate face array sizes
+        if (mesh.material_ids.size() != faceCount ||
+            mesh.indices.size() / 3 != faceCount ||
+            mesh.indices.size() % 3 != 0) {
+            return fail("Invalid OBJ mesh structure");
+        }
+
+        // Ensure indices fit into uint32_t
+        if (mesh.indices.size() >
+            std::numeric_limits<uint32_t>::max() - indexData.size()) {
+            return fail("Too many indices");
+        }
 
         int currentMaterialId = -1;
         uint32_t startIndex = static_cast<uint32_t>(indexData.size());
         uint32_t indexCount = 0;
 
-        size_t index_offset = 0;
+        for (size_t f = 0; f < faceCount; ++f) {
+            if (mesh.num_face_vertices[f] != 3) {
+                return fail("Expected triangulated mesh");
+            }
 
-        for (size_t f = 0; f < shape.mesh.num_face_vertices.size(); f++) { // for each polygon
-            int faceMaterialId = shape.mesh.material_ids[f];
+            const int materialId = mesh.material_ids[f];
 
-            if (faceMaterialId != currentMaterialId && indexCount > 0) {
-                subMeshes.push_back({ startIndex, indexCount, currentMaterialId });
+            if (materialId < -1 ||
+                (materialId >= 0 &&
+                 static_cast<size_t>(materialId) >= materials.size())) {
+                return fail("Invalid material ID");
+            }
+
+            // Start a new submesh when the material changes
+            if (materialId != currentMaterialId && indexCount > 0) {
+                subMeshes.push_back(
+                    {startIndex, indexCount, currentMaterialId});
+
                 startIndex = static_cast<uint32_t>(indexData.size());
                 indexCount = 0;
             }
-            currentMaterialId = faceMaterialId;
 
-            for (size_t v = 0; v < 3; v++) { // for each angle
-                tinyobj::index_t idx = shape.mesh.indices[index_offset + v];
+            currentMaterialId = materialId;
+
+            for (size_t v = 0; v < 3; ++v) {
+                const auto& idx = mesh.indices[f * 3 + v];
+
+                if (!validIndex(idx.vertex_index, attrib.vertices.size(), 3)) {
+                    return fail("Invalid vertex index");
+                }
+
+                if (idx.normal_index != -1 &&
+                    !validIndex(idx.normal_index, attrib.normals.size(), 3)) {
+                    return fail("Invalid normal index");
+                }
+
+                if (idx.texcoord_index != -1 &&
+                    !validIndex(idx.texcoord_index, attrib.texcoords.size(),
+                                2)) {
+                    return fail("Invalid texcoord index");
+                }
+
+                if (!attrib.colors.empty() &&
+                    !validIndex(idx.vertex_index, attrib.colors.size(), 3)) {
+                    return fail("Invalid vertex color index");
+                }
 
                 VertexAttributes vertex{};
-                vertex.position = {
-                    attrib.vertices[3 * idx.vertex_index + 0],
-                    attrib.vertices[3 * idx.vertex_index + 1],
-                    -attrib.vertices[3 * idx.vertex_index + 2]
-                };
+
+                const size_t p = static_cast<size_t>(idx.vertex_index) * 3;
+
+                vertex.position = {attrib.vertices[p], attrib.vertices[p + 1],
+                                   -attrib.vertices[p + 2]};
 
                 if (idx.normal_index >= 0) {
-                    vertex.normal = {
-                        attrib.normals[3 * idx.normal_index + 0],
-                        attrib.normals[3 * idx.normal_index + 1],
-                        -attrib.normals[3 * idx.normal_index + 2]
-                    };
+                    const size_t n = static_cast<size_t>(idx.normal_index) * 3;
+
+                    vertex.normal = {attrib.normals[n], attrib.normals[n + 1],
+                                     -attrib.normals[n + 2]};
                 }
 
                 if (idx.texcoord_index >= 0) {
-                    vertex.uv = {
-                        attrib.texcoords[2 * idx.texcoord_index + 0],
-                        1.0f - attrib.texcoords[2 * idx.texcoord_index + 1]
-                    };
+                    const size_t t =
+                        static_cast<size_t>(idx.texcoord_index) * 2;
+
+                    vertex.uv = {attrib.texcoords[t],
+                                 1.0f - attrib.texcoords[t + 1]};
                 }
 
-                // Material color is supplied separately for each draw. Keep
-                // actual vertex colors, or white as a neutral multiplier.
                 if (!attrib.colors.empty()) {
-                    vertex.color = {
-                        attrib.colors[3 * idx.vertex_index + 0],
-                        attrib.colors[3 * idx.vertex_index + 1],
-                        attrib.colors[3 * idx.vertex_index + 2]
-                    };
+                    vertex.color = {attrib.colors[p], attrib.colors[p + 1],
+                                    attrib.colors[p + 2]};
                 } else {
-                    vertex.color = { 1.0f, 1.0f, 1.0f };
+                    vertex.color = {1.0f, 1.0f, 1.0f};
                 }
 
-                if (uniqueVertices.count(vertex) == 0) {
-                    uniqueVertices[vertex] = static_cast<uint32_t>(vertexData.size());
+                // Reuse existing vertices
+                auto [it, inserted] = uniqueVertices.try_emplace(
+                    vertex, static_cast<uint32_t>(vertexData.size()));
+
+                if (inserted) {
                     vertexData.push_back(vertex);
                 }
-                indexData.push_back(uniqueVertices[vertex]);
-                indexCount++;
+
+                indexData.push_back(it->second);
+                ++indexCount;
             }
-            index_offset += 3;
         }
+
         if (indexCount > 0) {
-            subMeshes.push_back({ startIndex, indexCount, currentMaterialId });
+            subMeshes.push_back({startIndex, indexCount, currentMaterialId});
         }
     }
 
-    std::cout << "Loaded model: " << vertexData.size() << " vertices, "
-        << indexData.size() << " indices, "
-        << subMeshes.size() << " submeshes." << std::endl;
+    if (vertexData.empty() || indexData.empty()) {
+        return fail("OBJ contains no renderable geometry");
+    }
 
     std::vector<Material> parsedMaterials;
+    parsedMaterials.reserve(materials.size());
 
     for (const auto& tinyMat : materials) {
-        Material mat;
-        mat.diffuseColor = glm::vec3(
-            tinyMat.diffuse[0],
-            tinyMat.diffuse[1],
-            tinyMat.diffuse[2]
-        );
-        parsedMaterials.push_back(mat);
+        Material material{};
+
+        material.name;
+        material.diffuseColor = {tinyMat.diffuse[0], tinyMat.diffuse[1],
+                                 tinyMat.diffuse[2]};
+
+        parsedMaterials.push_back(std::move(material));
     }
 
-    return Mesh(vertexData, indexData, subMeshes, parsedMaterials);
+    ObjLoadResult result{};
+
+    result.mesh.emplace(std::move(vertexData), std::move(indexData),
+                        std::move(subMeshes), std::move(parsedMaterials));
+
+    result.warning = std::move(warn);
+    return result;
 }
 
-} // namespace C2Lux
+}  // namespace C2Lux

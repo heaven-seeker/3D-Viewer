@@ -24,36 +24,36 @@ public:
     std::string buildUI();
     std::string buildStartupUI();
     void rebuildFontsAndScale();
-    void buildSettingBlock();
+    void buildSettingsBlock();
 
     void draw(wgpu::RenderPassEncoder renderPass);
 
-    glm::vec4 bgColor = { 0.1f, 0.1f, 0.1f, 1.0f };
-    glm::vec4 modelColor = { 0.8f, 0.8f, 0.8f, 1.0f };
+    glm::vec4 m_backgroundColor = { 0.1f, 0.1f, 0.1f, 1.0f };
+    glm::vec4 m_modelColor = { 0.8f, 0.8f, 0.8f, 1.0f };
 
     // Light data
-    float lightDirection[3] = { 1.0f, 1.0f, 1.0f };
-    float ambientOcclusion = 0.1f;
-    float intensity = 0.2f;
-    float shininess = 10.f;
-    float specularStrength = 0.1f;
+    float m_lightDirection[3] = { 1.0f, 1.0f, 1.0f };
+    float m_ambientStrength = 0.1f;
+    float m_lightIntensity = 0.2f;
+    float m_shininess = 10.f;
+    float m_specularStrength = 0.1f;
 
-    bool fullScreen = false;
-    bool exitMenu = false;
-    bool exit = false;
-    bool fullScreenFlag = false;
+    bool m_fullscreen = false;
+    bool m_exitToMenuRequested = false;
+    bool m_exitRequested = false;
+    bool m_fullscreenFlag = false;
 
 private:
-    bool nfdInitialized = false;
-    bool glfwInitialized = false;
-    bool webgpuInitialized = false;
+    bool m_nfdInitialized = false;
+    bool m_glfwInitialized = false;
+    bool m_webgpuInitialized = false;
 
-    unsigned int fontSize = 16.f;
-    float currentScale = 2.1f;
-    bool bNeedsRebuild = false;
+    unsigned int m_fontSize = 16.f;
+    float m_uiScale = 2.1f;
+    bool m_needsRebuild = false;
 
 public:
-    bool needsRebuild() const { return bNeedsRebuild; }
+    bool needsRebuild() const { return m_needsRebuild; }
 };
 
 } // namespace C2Lux

@@ -24,35 +24,35 @@ void printMatrix(const std::string& name, const glm::mat4& m) {
 
 namespace C2Lux {
 
-App::~App() { uiLayer.destroy(); }
+App::~App() { m_uiLayer.destroy(); }
 
 App::App(std::unique_ptr<Window> window)
-    : mainWindow(std::move(window)),
-      appState(AppState::Startup),
-      bisRunning(true) {}
+    : m_mainWindow(std::move(window)),
+      m_appState(AppState::Startup),
+      m_isRunning(true) {}
 
 bool App::initWebGPU() {
-    if (!renderer.initInstance()) return false;
-    if (!renderer.setSurface(glfwGetWGPUSurface(renderer.getInstance().Get(),
-                                                mainWindow->getGLFWwindow())))
+    if (!m_renderer.initInstance()) return false;
+    if (!m_renderer.setSurface(glfwGetWGPUSurface(
+            m_renderer.getInstance().Get(), m_mainWindow->getGLFWwindow())))
         return false;
-    if (!renderer.initAdapter()) return false;
-    if (!renderer.initDevice()) return false;
-    if (!renderer.initQueue()) return false;
+    if (!m_renderer.initAdapter()) return false;
+    if (!m_renderer.initDevice()) return false;
+    if (!m_renderer.initQueue()) return false;
 
-    const auto [width, height] = mainWindow->getFramebufferSize();
-    if (!renderer.setupSurfaceConfig(width, height)) return false;
+    const auto [width, height] = m_mainWindow->getFramebufferSize();
+    if (!m_renderer.setupSurfaceConfig(width, height)) return false;
 
     wgpu::ShaderModule shader = ResourceManager::getInstance().loadShaderModule(
-        "shader.wgsl", renderer.getDevice());
+        "shader.wgsl", m_renderer.getDevice());
     if (!shader) return false;
 
-    renderer.initBuffers();
-    renderer.initBindGroups();
-    renderer.initRenderPipeline(shader);
+    m_renderer.initBuffers();
+    m_renderer.initBindGroups();
+    m_renderer.initRenderPipeline(shader);
 
-    if (!uiLayer.init(mainWindow->getGLFWwindow(), renderer.getDevice(),
-                      renderer.getSurfaceFormat())) {
+    if (!m_uiLayer.init(m_mainWindow->getGLFWwindow(), m_renderer.getDevice(),
+                        m_renderer.getSurfaceFormat())) {
         std::cerr << "Could not initialize UI Layer!" << std::endl;
         return false;
     }
@@ -65,51 +65,52 @@ void App::processInput(float deltaTime) {
     ImGuiIO& io = ImGui::GetIO();
 
     if (!io.WantCaptureKeyboard) {
-        if (glfwGetKey(mainWindow->getGLFWwindow(), GLFW_KEY_W) == GLFW_PRESS)
-            camera.moveForward(deltaTime);
-        if (glfwGetKey(mainWindow->getGLFWwindow(), GLFW_KEY_S) == GLFW_PRESS)
-            camera.moveBackward(deltaTime);
-        if (glfwGetKey(mainWindow->getGLFWwindow(), GLFW_KEY_A) == GLFW_PRESS)
-            camera.moveLeft(deltaTime);
-        if (glfwGetKey(mainWindow->getGLFWwindow(), GLFW_KEY_D) == GLFW_PRESS)
-            camera.moveRight(deltaTime);
-        if (glfwGetKey(mainWindow->getGLFWwindow(), GLFW_KEY_P) == GLFW_PRESS) {
-            printMatrix("\nView Matrix", camera.getViewMatrix());
+        if (glfwGetKey(m_mainWindow->getGLFWwindow(), GLFW_KEY_W) == GLFW_PRESS)
+            m_camera.moveForward(deltaTime);
+        if (glfwGetKey(m_mainWindow->getGLFWwindow(), GLFW_KEY_S) == GLFW_PRESS)
+            m_camera.moveBackward(deltaTime);
+        if (glfwGetKey(m_mainWindow->getGLFWwindow(), GLFW_KEY_A) == GLFW_PRESS)
+            m_camera.moveLeft(deltaTime);
+        if (glfwGetKey(m_mainWindow->getGLFWwindow(), GLFW_KEY_D) == GLFW_PRESS)
+            m_camera.moveRight(deltaTime);
+        if (glfwGetKey(m_mainWindow->getGLFWwindow(), GLFW_KEY_P) ==
+            GLFW_PRESS) {
+            printMatrix("\nView Matrix", m_camera.getViewMatrix());
             printMatrix("Projection",
-                        camera.getProjectionMatrix(1920.0f / 1080.0f));
+                        m_camera.getProjectionMatrix(1920.0f / 1080.0f));
         }
 
         static bool f11WasPressed = false;
-        bool f11IsPressed =
-            glfwGetKey(mainWindow->getGLFWwindow(), GLFW_KEY_F11) == GLFW_PRESS;
+        bool f11IsPressed = glfwGetKey(m_mainWindow->getGLFWwindow(),
+                                       GLFW_KEY_F11) == GLFW_PRESS;
 
         if (f11IsPressed && !f11WasPressed) {
-            mainWindow->toggleFullscreen();
+            m_mainWindow->toggleFullscreen();
         }
         f11WasPressed = f11IsPressed;
     }
 
     if (!io.WantCaptureMouse) {
-        float scroll = mainWindow->getAndResetScrollDelta();
+        float scroll = m_mainWindow->getAndResetScrollDelta();
         if (scroll != 0.0f) {
-            camera.zoom(scroll);
+            m_camera.zoom(scroll);
         }
 
         static double lastX = 0.0, lastY = 0.0;
         static bool isDragging = false;
 
-        if (glfwGetMouseButton(mainWindow->getGLFWwindow(),
+        if (glfwGetMouseButton(m_mainWindow->getGLFWwindow(),
                                GLFW_MOUSE_BUTTON_RIGHT) == GLFW_PRESS) {
             double xpos, ypos;
-            glfwGetCursorPos(mainWindow->getGLFWwindow(), &xpos, &ypos);
+            glfwGetCursorPos(m_mainWindow->getGLFWwindow(), &xpos, &ypos);
 
             if (!isDragging) {
                 lastX = xpos;
                 lastY = ypos;
                 isDragging = true;
             } else {
-                camera.rotate(static_cast<float>(xpos - lastX),
-                              static_cast<float>(ypos - lastY));
+                m_camera.rotate(static_cast<float>(xpos - lastX),
+                                static_cast<float>(ypos - lastY));
                 lastX = xpos;
                 lastY = ypos;
             }
@@ -122,42 +123,54 @@ void App::processInput(float deltaTime) {
 void App::renderFrame() {
     float deltaTime = getDeltaTime();
 
-    if (uiLayer.needsRebuild()) {
-        uiLayer.rebuildFontsAndScale();
+    if (m_uiLayer.needsRebuild()) {
+        m_uiLayer.rebuildFontsAndScale();
     }
 
-    if (uiLayer.exitMenu) {
-        appState = AppState::Startup;
-        uiLayer.exitMenu = false;
+    if (m_uiLayer.m_exitToMenuRequested) {
+        m_appState = AppState::Startup;
+        m_uiLayer.m_exitToMenuRequested = false;
     }
 
-    if (uiLayer.exit) {
-        bisRunning = false;
+    if (m_uiLayer.m_exitRequested) {
+        m_isRunning = false;
     }
 
-    uiLayer.beginFrame();
+    m_uiLayer.beginFrame();
 
-    switch (appState) {
+    switch (m_appState) {
         case AppState::Startup: {
-            std::string path = uiLayer.buildStartupUI();
+            std::string path = m_uiLayer.buildStartupUI();
             if (!path.empty()) {
-                appState = AppState::Viewing;
-                currentMesh = ResourceManager::getInstance().loadObj(path);
-                renderer.updateMeshBuffers(currentMesh);
+                auto result = ResourceManager::getInstance().loadObj(path);
+
+                if (!result.mesh) {
+                    std::cerr << result.error << '\n';
+                } else {
+                    m_appState = AppState::Viewing;
+                    m_currentMesh = std::move(*result.mesh);
+                    m_renderer.updateMeshBuffers(m_currentMesh);
+                }
             }
-            renderer.drawJustUI(uiLayer);
+            m_renderer.drawJustUI(m_uiLayer);
             break;
         }
 
         case AppState::Viewing: {
             processInput(deltaTime);
 
-            std::string path = uiLayer.buildUI();
+            std::string path = m_uiLayer.buildUI();
             if (!path.empty()) {
-                currentMesh = ResourceManager::getInstance().loadObj(path);
-                renderer.updateMeshBuffers(currentMesh);
+                auto result = ResourceManager::getInstance().loadObj(path);
+
+                if (!result.mesh) {
+                    std::cerr << result.error << '\n';
+                } else {
+                    m_currentMesh = std::move(*result.mesh);
+                    m_renderer.updateMeshBuffers(m_currentMesh);
+                }
             }
-            renderer.draw(uiLayer, camera, currentMesh);
+            m_renderer.draw(m_uiLayer, m_camera, m_currentMesh);
             break;
         }
     }
@@ -181,27 +194,28 @@ std::unique_ptr<App> App::create() {
 }
 
 bool App::isRunning() {
-    return bisRunning && !renderer.hasFailed() && !mainWindow->shouldClose();
+    return m_isRunning && !m_renderer.hasFailed() &&
+           !m_mainWindow->shouldClose();
 }
 
 void App::mainLoop() {
-    renderer.processEvents();
-    if (renderer.hasFailed()) return;
+    m_renderer.processEvents();
+    if (m_renderer.hasFailed()) return;
     if (!handleWindowEvents()) return;
     renderFrame();
 }
 
 bool App::handleWindowEvents() {
-    mainWindow->pollEvents();
-    auto [width, height] = mainWindow->getFramebufferSize();
+    m_mainWindow->pollEvents();
+    auto [width, height] = m_mainWindow->getFramebufferSize();
     if (width <= 0 || height <= 0) {
         glfwWaitEventsTimeout(0.05);
         return false;
     }
 
-    if (mainWindow->hasResized()) {
-        renderer.resizeSwapchain(width, height);
-        mainWindow->setResized(false);
+    if (m_mainWindow->hasResized()) {
+        m_renderer.resizeSurface(width, height);
+        m_mainWindow->setResized(false);
     }
 
     return true;

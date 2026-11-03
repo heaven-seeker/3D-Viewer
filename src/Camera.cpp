@@ -9,61 +9,61 @@
 namespace C2Lux {
 
 Camera::Camera() :
-    position(0.0f, 0.0f, 5.0f),
-    worldUp(0.0f, 1.0f, 0.0f),
-    yaw(-90.0f),
+    m_position(0.0f, 0.0f, 5.0f),
+    m_worldUp(0.0f, 1.0f, 0.0f),
+    m_yawDegrees(-90.0f),
 
-    pitch(0.0f),
-    movementSpeed(2.5f),
-    mouseSensitivity(0.1f),
-    fov(45.0f)
+    m_pitchDegrees(0.0f),
+    m_movementSpeed(2.5f),
+    m_mouseSensitivity(0.1f),
+    m_fovDegrees(45.0f)
 {
     update();
 }
 
 void Camera::update() {
     glm::vec3 newFront;
-    newFront.x = cos(glm::radians(yaw)) * cos(glm::radians(pitch));
-    newFront.y = sin(glm::radians(pitch));
-    newFront.z = sin(glm::radians(yaw)) * cos(glm::radians(pitch));
-    front = glm::normalize(newFront);
+    newFront.x = cos(glm::radians(m_yawDegrees)) * cos(glm::radians(m_pitchDegrees));
+    newFront.y = sin(glm::radians(m_pitchDegrees));
+    newFront.z = sin(glm::radians(m_yawDegrees)) * cos(glm::radians(m_pitchDegrees));
+    m_front = glm::normalize(newFront);
 
-    right = glm::normalize(glm::cross(front, worldUp));
-    up = glm::normalize(glm::cross(right, front));
+    m_right = glm::normalize(glm::cross(m_front, m_worldUp));
+    m_up = glm::normalize(glm::cross(m_right, m_front));
 }
 
 void Camera::rotate(float deltaX, float deltaY) {
-    yaw += deltaX * mouseSensitivity;
-    pitch -= deltaY * mouseSensitivity;
+    m_yawDegrees += deltaX * m_mouseSensitivity;
+    m_pitchDegrees -= deltaY * m_mouseSensitivity;
 
-    pitch = std::clamp(pitch, -89.0f, 89.0f);
+    m_pitchDegrees = std::clamp(m_pitchDegrees, -89.0f, 89.0f);
     
     update();
 }
 
 void Camera::zoom(float delta) {
-    fov -= delta * 2.0f;
-    fov = std::clamp(fov, 1.0f, 45.0f);
+    m_fovDegrees -= delta * 2.0f;
+    m_fovDegrees = std::clamp(m_fovDegrees, 1.0f, 45.0f);
 }
 
-void Camera::moveForward(float deltaTime) { position += front * movementSpeed * deltaTime; }
-void Camera::moveBackward(float deltaTime) { position -= front * movementSpeed * deltaTime; }
-void Camera::moveLeft(float deltaTime) { position -= right * movementSpeed * deltaTime; }
-void Camera::moveRight(float deltaTime) { position += right * movementSpeed * deltaTime; }
+void Camera::moveForward(float deltaTime) { m_position += m_front * m_movementSpeed * deltaTime; }
+void Camera::moveBackward(float deltaTime) { m_position -= m_front * m_movementSpeed * deltaTime; }
+void Camera::moveLeft(float deltaTime) { m_position -= m_right * m_movementSpeed * deltaTime; }
+void Camera::moveRight(float deltaTime) { m_position += m_right * m_movementSpeed * deltaTime; }
 
 glm::mat4 Camera::getViewMatrix() const {
-    return glm::lookAt(position, position + front, up);
+    return glm::lookAt(m_position, m_position + m_front, m_up);
 }
 
 glm::mat4 Camera::getProjectionMatrix(float aspect) const {
-    return glm::perspective(glm::radians(fov), aspect, 0.01f, 100.0f);
+    return glm::perspective(glm::radians(m_fovDegrees), aspect, 0.01f, 100.0f);
 }
 
 void Camera::debug() const {
     std::cout << "\r"
-        << "Pos: [" << position.x << ", " << position.y << ", " << position.z << "] | "
-        << "Front: [" << front.x << ", " << front.y << ", " << front.z << "] | "
-        << "Yaw: " << yaw << "  Pitch: " << pitch
+        << "Pos: [" << m_position.x << ", " << m_position.y << ", " << m_position.z << "] | "
+        << "Front: [" << m_front.x << ", " << m_front.y << ", " << m_front.z << "] | "
+        << "Yaw: " << m_yawDegrees << "  Pitch: " << m_pitchDegrees
         << std::string(10, ' ')
         << std::flush;
 }

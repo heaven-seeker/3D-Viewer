@@ -26,13 +26,13 @@ class App {
     bool handleWindowEvents();
 
    private:
-    std::unique_ptr<Window> mainWindow;
-    Renderer renderer;
-    UILayer uiLayer;
-    Camera camera;
-    AppState appState;
+    std::unique_ptr<Window> m_mainWindow;
+    Renderer m_renderer;
+    UILayer m_uiLayer;
+    Camera m_camera;
+    AppState m_appState;
 
-    bool bisRunning;
+    bool m_isRunning;
 
     void processInput(float deltaTime);
     void renderFrame();
@@ -40,10 +40,10 @@ class App {
    public:
     float getDeltaTime() const;
 
-    Mesh currentMesh;
+    Mesh m_currentMesh;
 
-    AppState getAppState() const { return appState; }
-    void setAppState(AppState newState) { appState = newState; }
+    AppState getAppState() const { return m_appState; }
+    void setAppState(AppState newState) { m_appState = newState; }
 };
 
 }  // namespace C2Lux

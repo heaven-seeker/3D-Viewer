@@ -20,39 +20,39 @@ Renderer::Renderer() = default;
 
 bool Renderer::initInstance() {
     wgpu::InstanceDescriptor instanceDesc{};
-    instance = wgpu::CreateInstance(&instanceDesc);
-    if (!instance) {
+    m_instance = wgpu::CreateInstance(&instanceDesc);
+    if (!m_instance) {
         std::cerr << "Could not intialize WebGPU!" << std::endl;
         return false;
     }
     return true;
 }
 
-bool Renderer::setSurface(WGPUSurface c_surface) {
-    if (!c_surface) {
+bool Renderer::setSurface(WGPUSurface nativeSurface) {
+    if (!nativeSurface) {
         std::cerr << "Could not set surface!" << std::endl;
         return false;
     }
-    surface = wgpu::Surface::Acquire(c_surface);
+    m_surface = wgpu::Surface::Acquire(nativeSurface);
     return true;
 }
 
 bool Renderer::initAdapter() {
     wgpu::RequestAdapterOptions adapterOpts{};
     adapterOpts.nextInChain = nullptr;
-    adapterOpts.compatibleSurface = surface;
+    adapterOpts.compatibleSurface = m_surface;
 
     bool requestEnded = false;
 
-    instance.RequestAdapter(
+    m_instance.RequestAdapter(
         &adapterOpts, wgpu::CallbackMode::AllowProcessEvents,
         [this, &requestEnded](wgpu::RequestAdapterStatus status,
-                              wgpu::Adapter adapter_,
+                              wgpu::Adapter requestedAdapter,
                               wgpu::StringView message) {
             if (status == wgpu::RequestAdapterStatus::Success) {
-                adapter = adapter_;
+                m_adapter = requestedAdapter;
                 wgpu::AdapterInfo info{};
-                if (adapter.GetInfo(&info) == wgpu::Status::Success) {
+                if (m_adapter.GetInfo(&info) == wgpu::Status::Success) {
                     std::cout
                         << "WebGPU adapter: " << std::string_view(info.device)
                         << std::endl;
@@ -66,11 +66,11 @@ bool Renderer::initAdapter() {
         });
 
     while (!requestEnded) {
-        instance.ProcessEvents();
+        m_instance.ProcessEvents();
         std::this_thread::sleep_for(std::chrono::milliseconds(1));
     }
 
-    return adapter != nullptr;
+    return m_adapter != nullptr;
 }
 
 bool Renderer::initDevice() {
@@ -90,7 +90,7 @@ bool Renderer::initDevice() {
             if (reason == wgpu::DeviceLostReason::Destroyed ||
                 reason == wgpu::DeviceLostReason::CallbackCancelled)
                 return;
-            failed = true;
+            m_hasFailed = true;
             std::cerr << "Device lost (" << static_cast<uint32_t>(reason)
                       << "): " << std::string_view(message) << std::endl;
         });
@@ -105,12 +105,13 @@ bool Renderer::initDevice() {
 
     bool requestEnded = false;
 
-    adapter.RequestDevice(
+    m_adapter.RequestDevice(
         &deviceDesc, wgpu::CallbackMode::AllowProcessEvents,
         [this, &requestEnded](wgpu::RequestDeviceStatus status,
-                              wgpu::Device device_, wgpu::StringView message) {
+                              wgpu::Device requestedDevice,
+                              wgpu::StringView message) {
             if (status == wgpu::RequestDeviceStatus::Success) {
-                device = device_;
+                m_device = requestedDevice;
             } else {
                 std::cerr << "Could not get WebGPU device: ";
                 std::cerr << std::string_view(message);
@@ -120,17 +121,17 @@ bool Renderer::initDevice() {
         });
 
     while (!requestEnded) {
-        instance.ProcessEvents();
+        m_instance.ProcessEvents();
         std::this_thread::sleep_for(std::chrono::milliseconds(1));
     }
 
-    return device != nullptr;
+    return m_device != nullptr;
 }
 
 bool Renderer::initQueue() {
-    queue = device.GetQueue();
+    m_queue = m_device.GetQueue();
 
-    return queue != nullptr;
+    return m_queue != nullptr;
 }
 
 void Renderer::initBindGroups() {
@@ -160,16 +161,16 @@ void Renderer::initBindGroups() {
     bindGroupLayoutDescriptor.entryCount =
         static_cast<uint32_t>(bindingLayoutEntries.size());
     bindGroupLayoutDescriptor.entries = bindingLayoutEntries.data();
-    bindGroupLayouts.push_back(
-        device.CreateBindGroupLayout(&bindGroupLayoutDescriptor));
+    m_bindGroupLayouts.push_back(
+        m_device.CreateBindGroupLayout(&bindGroupLayoutDescriptor));
 
     // Light
     wgpu::BindGroupLayoutDescriptor lightbindGroupLayoutDescriptor = {};
     lightbindGroupLayoutDescriptor.nextInChain = nullptr;
     lightbindGroupLayoutDescriptor.entryCount = 1;
     lightbindGroupLayoutDescriptor.entries = &lightBindingLayout;
-    bindGroupLayouts.push_back(
-        device.CreateBindGroupLayout(&lightbindGroupLayoutDescriptor));
+    m_bindGroupLayouts.push_back(
+        m_device.CreateBindGroupLayout(&lightbindGroupLayoutDescriptor));
 
     // Group 2 selects a material for each submesh draw.
     wgpu::BindGroupLayoutEntry materialBinding{};
@@ -182,21 +183,21 @@ void Renderer::initBindGroups() {
     wgpu::BindGroupLayoutDescriptor materialLayoutDescriptor{};
     materialLayoutDescriptor.entryCount = 1;
     materialLayoutDescriptor.entries = &materialBinding;
-    bindGroupLayouts.push_back(
-        device.CreateBindGroupLayout(&materialLayoutDescriptor));
+    m_bindGroupLayouts.push_back(
+        m_device.CreateBindGroupLayout(&materialLayoutDescriptor));
 
     wgpu::PipelineLayoutDescriptor layoutDescriptor{};
     layoutDescriptor.nextInChain = nullptr;
     layoutDescriptor.bindGroupLayoutCount =
-        static_cast<uint32_t>(bindGroupLayouts.size());
-    layoutDescriptor.bindGroupLayouts = bindGroupLayouts.data();
-    pipelineLayout = device.CreatePipelineLayout(&layoutDescriptor);
+        static_cast<uint32_t>(m_bindGroupLayouts.size());
+    layoutDescriptor.bindGroupLayouts = m_bindGroupLayouts.data();
+    m_pipelineLayout = m_device.CreatePipelineLayout(&layoutDescriptor);
 
     std::vector<wgpu::BindGroupEntry> bindings(2);
 
     bindings[0].binding = 0;  // The index of the binding (the entries in
                               // bindGroupDesc can be in any order)
-    bindings[0].buffer = uniformBuffer;  // The buffer it is actually bound to
+    bindings[0].buffer = m_uniformBuffer;  // The buffer it is actually bound to
     bindings[0].offset =
         0;  // We can specify an offset within the buffer, so that a single
             // buffer can hold, multiple uniform blocks.
@@ -204,45 +205,45 @@ void Renderer::initBindGroups() {
         sizeof(Uniforms);  // And we specify again the size of the buffer.
 
     bindings[1].binding = 0;
-    bindings[1].buffer = lightBuffer;
+    bindings[1].buffer = m_lightBuffer;
     bindings[1].offset = 0;
     bindings[1].size = sizeof(LightData);
 
     wgpu::BindGroupDescriptor bindGroupDescriptor{};
     bindGroupDescriptor.nextInChain = nullptr;
-    bindGroupDescriptor.layout = bindGroupLayouts[0];
+    bindGroupDescriptor.layout = m_bindGroupLayouts[0];
     bindGroupDescriptor.entryCount = (uint32_t)bindings.size() - 1;
     bindGroupDescriptor.entries = &bindings[0];
-    bindGroups.push_back(device.CreateBindGroup(&bindGroupDescriptor));
+    m_bindGroups.push_back(m_device.CreateBindGroup(&bindGroupDescriptor));
 
-    bindGroupDescriptor.layout = bindGroupLayouts[1];
+    bindGroupDescriptor.layout = m_bindGroupLayouts[1];
     bindGroupDescriptor.entryCount = 1;
     bindGroupDescriptor.entries = &bindings[1];
-    bindGroups.push_back(device.CreateBindGroup(&bindGroupDescriptor));
+    m_bindGroups.push_back(m_device.CreateBindGroup(&bindGroupDescriptor));
 }
 
 bool Renderer::setupSurfaceConfig(int width, int height) {
     if (width <= 0 || height <= 0) return false;
-    surfaceConfig.nextInChain = nullptr;
-    surfaceConfig.device = device;
-    surfaceConfig.usage = wgpu::TextureUsage::RenderAttachment;
-    surfaceConfig.presentMode = wgpu::PresentMode::Fifo;
-    surfaceConfig.viewFormatCount = 0;
-    surfaceConfig.viewFormats = nullptr;
+    m_surfaceConfig.nextInChain = nullptr;
+    m_surfaceConfig.device = m_device;
+    m_surfaceConfig.usage = wgpu::TextureUsage::RenderAttachment;
+    m_surfaceConfig.presentMode = wgpu::PresentMode::Fifo;
+    m_surfaceConfig.viewFormatCount = 0;
+    m_surfaceConfig.viewFormats = nullptr;
 
     wgpu::SurfaceCapabilities capabilities{};
-    if (surface.GetCapabilities(adapter, &capabilities) !=
+    if (m_surface.GetCapabilities(m_adapter, &capabilities) !=
             wgpu::Status::Success ||
         capabilities.formatCount == 0 || capabilities.alphaModeCount == 0) {
         std::cerr << "Could not query surface capabilities." << std::endl;
         return false;
     }
-    surfaceConfig.format = capabilities.formats[0];
-    surfaceConfig.alphaMode = capabilities.alphaModes[0];
-    surfaceFormat = surfaceConfig.format;
-    surfaceConfig.width = static_cast<uint32_t>(width);
-    surfaceConfig.height = static_cast<uint32_t>(height);
-    surface.Configure(&surfaceConfig);
+    m_surfaceConfig.format = capabilities.formats[0];
+    m_surfaceConfig.alphaMode = capabilities.alphaModes[0];
+    m_surfaceFormat = m_surfaceConfig.format;
+    m_surfaceConfig.width = static_cast<uint32_t>(width);
+    m_surfaceConfig.height = static_cast<uint32_t>(height);
+    m_surface.Configure(&m_surfaceConfig);
     return true;
 }
 
@@ -251,25 +252,25 @@ void Renderer::draw(UILayer& ui, const Camera& camera, const Mesh& mesh) {
     uniforms.time = static_cast<float>(glfwGetTime());
     uniforms.modelMatrix = glm::mat4(1.0f);
     uniforms.viewMatrix = camera.getViewMatrix();
-    float aspect = static_cast<float>(surfaceConfig.width) /
-                   static_cast<float>(surfaceConfig.height);
+    float aspect = static_cast<float>(m_surfaceConfig.width) /
+                   static_cast<float>(m_surfaceConfig.height);
     uniforms.projectionMatrix = camera.getProjectionMatrix(aspect);
     uniforms.cameraPosition = camera.getPosition();
-    uniforms.color = {ui.modelColor.x, ui.modelColor.y, ui.modelColor.z,
-                      ui.modelColor.w};
+    uniforms.color = {ui.m_modelColor.x, ui.m_modelColor.y, ui.m_modelColor.z,
+                      ui.m_modelColor.w};
 
     LightData lightData{};
-    lightData.direction = {ui.lightDirection[0], ui.lightDirection[1],
-                           ui.lightDirection[2]};
-    lightData.ambient = ui.ambientOcclusion;
-    lightData.intensity = ui.intensity;
-    lightData.shininess = ui.shininess;
-    lightData.specularStrength = ui.specularStrength;
+    lightData.direction = {ui.m_lightDirection[0], ui.m_lightDirection[1],
+                           ui.m_lightDirection[2]};
+    lightData.ambient = ui.m_ambientStrength;
+    lightData.intensity = ui.m_lightIntensity;
+    lightData.shininess = ui.m_shininess;
+    lightData.specularStrength = ui.m_specularStrength;
 
-    queue.WriteBuffer(lightBuffer, 0, &lightData, sizeof(LightData));
-    queue.WriteBuffer(uniformBuffer, 0, &uniforms, sizeof(Uniforms));
+    m_queue.WriteBuffer(m_lightBuffer, 0, &lightData, sizeof(LightData));
+    m_queue.WriteBuffer(m_uniformBuffer, 0, &uniforms, sizeof(Uniforms));
 
-    wgpu::TextureView targetView = getNextSurfaceViewData();
+    wgpu::TextureView targetView = acquireSurfaceTextureView();
     if (!targetView) {
         ui.endFrame();
         return;
@@ -278,18 +279,19 @@ void Renderer::draw(UILayer& ui, const Camera& camera, const Mesh& mesh) {
     wgpu::CommandEncoderDescriptor encoderDesc = {};
     encoderDesc.nextInChain = nullptr;
     encoderDesc.label = "Command encoder";
-    wgpu::CommandEncoder encoder = device.CreateCommandEncoder(&encoderDesc);
+    wgpu::CommandEncoder encoder = m_device.CreateCommandEncoder(&encoderDesc);
 
     wgpu::RenderPassColorAttachment colorAttachment = {};
-    colorAttachment.view = msaaTextureView;
+    colorAttachment.view = m_msaaTextureView;
     colorAttachment.resolveTarget = targetView;
     colorAttachment.loadOp = wgpu::LoadOp::Clear;
     colorAttachment.storeOp = wgpu::StoreOp::Discard;
     colorAttachment.clearValue =
-        wgpu::Color{ui.bgColor.x, ui.bgColor.y, ui.bgColor.z, ui.bgColor.w};
+        wgpu::Color{ui.m_backgroundColor.x, ui.m_backgroundColor.y,
+                    ui.m_backgroundColor.z, ui.m_backgroundColor.w};
 
     wgpu::RenderPassDepthStencilAttachment depthAttachment{};
-    depthAttachment.view = depthTextureView;
+    depthAttachment.view = m_depthTextureView;
     depthAttachment.depthClearValue = 1.0f;
     depthAttachment.depthLoadOp = wgpu::LoadOp::Clear;
     depthAttachment.depthStoreOp = wgpu::StoreOp::Discard;
@@ -305,14 +307,14 @@ void Renderer::draw(UILayer& ui, const Camera& camera, const Mesh& mesh) {
     pass1Desc.depthStencilAttachment = &depthAttachment;
 
     wgpu::RenderPassEncoder pass1 = encoder.BeginRenderPass(&pass1Desc);
-    pass1.SetPipeline(renderPipeline);
-    if (indexCount > 0 && vertexBuffer && indexBuffer) {
-        pass1.SetVertexBuffer(0, vertexBuffer);
+    pass1.SetPipeline(m_renderPipeline);
+    if (m_indexCount > 0 && m_vertexBuffer && m_indexBuffer) {
+        pass1.SetVertexBuffer(0, m_vertexBuffer);
         pass1.SetIndexBuffer(
-            indexBuffer, wgpu::IndexFormat::Uint32, 0,
-            static_cast<uint64_t>(indexCount) * sizeof(uint32_t));
-        pass1.SetBindGroup(0, bindGroups[0]);
-        pass1.SetBindGroup(1, bindGroups[1]);
+            m_indexBuffer, wgpu::IndexFormat::Uint32, 0,
+            static_cast<uint64_t>(m_indexCount) * sizeof(uint32_t));
+        pass1.SetBindGroup(0, m_bindGroups[0]);
+        pass1.SetBindGroup(1, m_bindGroups[1]);
 
         for (const auto& submesh : mesh.getSubMeshes()) {
             // Same buffer and bind group, but a different material window.
@@ -345,17 +347,17 @@ void Renderer::draw(UILayer& ui, const Camera& camera, const Mesh& mesh) {
     wgpu::CommandBuffer command = encoder.Finish(&cmdBufferDesc);
 
     // std::cout << "Submitting command..." << std::endl;
-    queue.Submit(1, &command);
+    m_queue.Submit(1, &command);
 
     targetView = nullptr;
 
-    surface.Present();
+    m_surface.Present();
 
     // std::cout << "Command submitted." << std::endl;
 }
 
 void Renderer::drawJustUI(UILayer& ui) {
-    wgpu::TextureView targetView = getNextSurfaceViewData();
+    wgpu::TextureView targetView = acquireSurfaceTextureView();
     if (!targetView) {
         ui.endFrame();
         return;
@@ -364,7 +366,7 @@ void Renderer::drawJustUI(UILayer& ui) {
     wgpu::CommandEncoderDescriptor encoderDesc = {};
     encoderDesc.nextInChain = nullptr;
     encoderDesc.label = "Command encoder";
-    wgpu::CommandEncoder encoder = device.CreateCommandEncoder(&encoderDesc);
+    wgpu::CommandEncoder encoder = m_device.CreateCommandEncoder(&encoderDesc);
 
     wgpu::RenderPassColorAttachment uiAttachment = {};
     uiAttachment.view = targetView;
@@ -387,18 +389,18 @@ void Renderer::drawJustUI(UILayer& ui) {
     wgpu::CommandBuffer command = encoder.Finish(&cmdBufferDesc);
 
     // std::cout << "Submitting command..." << std::endl;
-    queue.Submit(1, &command);
+    m_queue.Submit(1, &command);
 
     targetView = nullptr;
 
-    surface.Present();
+    m_surface.Present();
 
     // std::cout << "Command submitted." << std::endl;
 }
 
-wgpu::TextureView Renderer::getNextSurfaceViewData() {
+wgpu::TextureView Renderer::acquireSurfaceTextureView() {
     wgpu::SurfaceTexture surfaceTexture{};
-    surface.GetCurrentTexture(&surfaceTexture);
+    m_surface.GetCurrentTexture(&surfaceTexture);
 
     switch (surfaceTexture.status) {
         case wgpu::SurfaceGetCurrentTextureStatus::SuccessOptimal:
@@ -409,10 +411,10 @@ wgpu::TextureView Renderer::getNextSurfaceViewData() {
         case wgpu::SurfaceGetCurrentTextureStatus::Outdated:
         case wgpu::SurfaceGetCurrentTextureStatus::Lost:
             // Reconfigure before acquiring a texture on the next frame.
-            surface.Configure(&surfaceConfig);
+            m_surface.Configure(&m_surfaceConfig);
             return nullptr;
         default:
-            failed = true;
+            m_hasFailed = true;
             std::cerr << "Could not acquire surface texture (status "
                       << static_cast<uint32_t>(surfaceTexture.status) << ")."
                       << std::endl;
@@ -434,36 +436,36 @@ wgpu::TextureView Renderer::getNextSurfaceViewData() {
     return surfaceTexture.texture.CreateView(&viewDescriptor);
 }
 
-void Renderer::resizeSwapchain(int width, int height) {
+void Renderer::resizeSurface(int width, int height) {
     if (width <= 0 || height <= 0) return;
 
-    msaaTextureView = nullptr;
-    depthTextureView = nullptr;
-    msaaTexture = nullptr;
-    depthTexture = nullptr;
+    m_msaaTextureView = nullptr;
+    m_depthTextureView = nullptr;
+    m_msaaTexture = nullptr;
+    m_depthTexture = nullptr;
 
-    surfaceConfig.width = static_cast<uint32_t>(width);
-    surfaceConfig.height = static_cast<uint32_t>(height);
-    surface.Configure(&surfaceConfig);
+    m_surfaceConfig.width = static_cast<uint32_t>(width);
+    m_surfaceConfig.height = static_cast<uint32_t>(height);
+    m_surface.Configure(&m_surfaceConfig);
 
     wgpu::TextureDescriptor msaaDesc{};
-    msaaDesc.size = {surfaceConfig.width, surfaceConfig.height, 1};
+    msaaDesc.size = {m_surfaceConfig.width, m_surfaceConfig.height, 1};
     msaaDesc.sampleCount = 4;
-    msaaDesc.format = surfaceFormat;
+    msaaDesc.format = m_surfaceFormat;
     msaaDesc.usage = wgpu::TextureUsage::RenderAttachment;
-    msaaTexture = device.CreateTexture(&msaaDesc);
-    msaaTextureView = msaaTexture.CreateView();
+    m_msaaTexture = m_device.CreateTexture(&msaaDesc);
+    m_msaaTextureView = m_msaaTexture.CreateView();
 
-    depthTextureDescriptor.size = {surfaceConfig.width, surfaceConfig.height,
-                                   1};
-    depthTextureDescriptor.sampleCount = 4;
-    depthTexture = device.CreateTexture(&depthTextureDescriptor);
-    depthTextureView = depthTexture.CreateView();
+    m_depthTextureDescriptor.size = {m_surfaceConfig.width,
+                                     m_surfaceConfig.height, 1};
+    m_depthTextureDescriptor.sampleCount = 4;
+    m_depthTexture = m_device.CreateTexture(&m_depthTextureDescriptor);
+    m_depthTextureView = m_depthTexture.CreateView();
 }
 
 bool Renderer::updateMaterialBuffer(const Mesh& model) {
     wgpu::Limits limits{};
-    if (device.GetLimits(&limits) != wgpu::Status::Success) {
+    if (m_device.GetLimits(&limits) != wgpu::Status::Success) {
         std::cerr << "Could not query material buffer alignment." << std::endl;
         return false;
     }
@@ -473,12 +475,16 @@ bool Renderer::updateMaterialBuffer(const Mesh& model) {
     const uint32_t alignment = limits.minUniformBufferOffsetAlignment;
     m_materialStride = static_cast<uint32_t>(
         (sizeof(MaterialUniforms) + alignment - 1) / alignment * alignment);
+
     const size_t materialCount = model.getMaterials().size();
-    const uint64_t slotCount = static_cast<uint64_t>(materialCount) + 1;
-    if (materialCount > std::numeric_limits<uint32_t>::max() / m_materialStride ||
+    const uint64_t slotCount =
+        static_cast<uint64_t>(materialCount) + 1;  // + 1 default white material
+    if (materialCount >
+            std::numeric_limits<uint32_t>::max() / m_materialStride ||
         slotCount > limits.maxBufferSize / m_materialStride) {
-        std::cerr << "Materials exceed the device's dynamic uniform buffer limits."
-                  << std::endl;
+        std::cerr
+            << "Materials exceed the device's dynamic uniform buffer limits."
+            << std::endl;
         return false;
     }
     const uint64_t bufferSize = slotCount * m_materialStride;
@@ -488,7 +494,8 @@ bool Renderer::updateMaterialBuffer(const Mesh& model) {
     MaterialUniforms uniforms{};
     std::memcpy(data.data(), &uniforms, sizeof(uniforms));
     for (size_t i = 0; i < materialCount; ++i) {
-        uniforms.baseColor = glm::vec4(model.getMaterials()[i].diffuseColor, 1.0f);
+        uniforms.baseColor =
+            glm::vec4(model.getMaterials()[i].diffuseColor, 1.0f);
         std::memcpy(data.data() + (i + 1) * m_materialStride, &uniforms,
                     sizeof(uniforms));
     }
@@ -498,8 +505,8 @@ bool Renderer::updateMaterialBuffer(const Mesh& model) {
     bufferDescriptor.size = bufferSize;
     bufferDescriptor.usage =
         wgpu::BufferUsage::Uniform | wgpu::BufferUsage::CopyDst;
-    m_materialBuffer = device.CreateBuffer(&bufferDescriptor);
-    queue.WriteBuffer(m_materialBuffer, 0, data.data(), data.size());
+    m_materialBuffer = m_device.CreateBuffer(&bufferDescriptor);
+    m_queue.WriteBuffer(m_materialBuffer, 0, data.data(), data.size());
 
     wgpu::BindGroupEntry binding{};
     binding.binding = 0;
@@ -510,10 +517,10 @@ bool Renderer::updateMaterialBuffer(const Mesh& model) {
 
     wgpu::BindGroupDescriptor bindGroupDescriptor{};
     bindGroupDescriptor.label = "All material colors, dynamic offset";
-    bindGroupDescriptor.layout = bindGroupLayouts[2];
+    bindGroupDescriptor.layout = m_bindGroupLayouts[2];
     bindGroupDescriptor.entryCount = 1;
     bindGroupDescriptor.entries = &binding;
-    m_materialBindGroup = device.CreateBindGroup(&bindGroupDescriptor);
+    m_materialBindGroup = m_device.CreateBindGroup(&bindGroupDescriptor);
     m_materialCount = materialCount;
     return true;
 }
@@ -527,56 +534,60 @@ uint32_t Renderer::getMaterialOffset(int materialId) const {
 
 void Renderer::updateMeshBuffers(const Mesh& model) {
     if (!updateMaterialBuffer(model)) {
-        failed = true;
-        indexCount = 0;
+        m_hasFailed = true;
+        m_indexCount = 0;
         return;
     }
 
-    if (!vertexBuffer || model.getVertexData().size() >= vertexBufferSize) {
-        if (model.getVertexData().size() >= vertexBufferSize) {
-            vertexBufferSize =
+    if (!m_vertexBuffer ||
+        model.getVertexData().size() >= m_vertexBufferCapacity) {
+        if (model.getVertexData().size() >= m_vertexBufferCapacity) {
+            m_vertexBufferCapacity =
                 model.getVertexData().size() + model.getVertexData().size() / 2;
         }
-        if (vertexBuffer) {
-            vertexBuffer.Destroy();
+        if (m_vertexBuffer) {
+            m_vertexBuffer.Destroy();
         }
 
         wgpu::BufferDescriptor bufferDesc{};
         bufferDesc.nextInChain = nullptr;
-        bufferDesc.size = vertexBufferSize * sizeof(VertexAttributes);
+        bufferDesc.size = m_vertexBufferCapacity * sizeof(VertexAttributes);
         bufferDesc.label = "Vertex buffer";
         bufferDesc.usage =
             wgpu::BufferUsage::CopyDst | wgpu::BufferUsage::Vertex;
         bufferDesc.mappedAtCreation = false;
-        vertexBuffer = device.CreateBuffer(&bufferDesc);
+        m_vertexBuffer = m_device.CreateBuffer(&bufferDesc);
     }
 
-    if (!indexBuffer || model.getIndexData().size() >= indexBufferSize) {
-        if (model.getIndexData().size() >= indexBufferSize) {
-            indexBufferSize =
+    if (!m_indexBuffer ||
+        model.getIndexData().size() >= m_indexBufferCapacity) {
+        if (model.getIndexData().size() >= m_indexBufferCapacity) {
+            m_indexBufferCapacity =
                 model.getIndexData().size() + model.getIndexData().size() / 2;
         }
-        if (indexBuffer) {
-            indexBuffer.Destroy();
+        if (m_indexBuffer) {
+            m_indexBuffer.Destroy();
         }
 
         wgpu::BufferDescriptor indexBufferDesc{};
         indexBufferDesc.nextInChain = nullptr;
         indexBufferDesc.size =
-            indexBufferSize * sizeof(uint32_t);  // default indexBufferSize
+            m_indexBufferCapacity *
+            sizeof(uint32_t);  // default m_indexBufferCapacity
         indexBufferDesc.label = "Index buffer";
         indexBufferDesc.usage =
             wgpu::BufferUsage::CopyDst | wgpu::BufferUsage::Index;
         indexBufferDesc.mappedAtCreation = false;
-        indexBuffer = device.CreateBuffer(&indexBufferDesc);
+        m_indexBuffer = m_device.CreateBuffer(&indexBufferDesc);
     }
 
-    queue.WriteBuffer(vertexBuffer, 0, model.getVertexData().data(),
-                      model.getVertexData().size() * sizeof(VertexAttributes));
+    m_queue.WriteBuffer(
+        m_vertexBuffer, 0, model.getVertexData().data(),
+        model.getVertexData().size() * sizeof(VertexAttributes));
 
-    queue.WriteBuffer(indexBuffer, 0, model.getIndexData().data(),
-                      model.getIndexData().size() * sizeof(uint32_t));
-    indexCount = static_cast<uint32_t>(model.getIndexData().size());
+    m_queue.WriteBuffer(m_indexBuffer, 0, model.getIndexData().data(),
+                        model.getIndexData().size() * sizeof(uint32_t));
+    m_indexCount = static_cast<uint32_t>(model.getIndexData().size());
 }
 
 void Renderer::initBuffers() {
@@ -587,7 +598,7 @@ void Renderer::initBuffers() {
     uniformBufferDesc.mappedAtCreation = false;
     uniformBufferDesc.usage =
         wgpu::BufferUsage::CopyDst | wgpu::BufferUsage::Uniform;
-    uniformBuffer = device.CreateBuffer(&uniformBufferDesc);
+    m_uniformBuffer = m_device.CreateBuffer(&uniformBufferDesc);
 
     wgpu::BufferDescriptor lightBufferDesc{};
     lightBufferDesc.nextInChain = nullptr;
@@ -596,7 +607,7 @@ void Renderer::initBuffers() {
     lightBufferDesc.size = c2m::ceilToMultipleOf16(sizeof(LightData));
     lightBufferDesc.usage =
         wgpu::BufferUsage::CopyDst | wgpu::BufferUsage::Uniform;
-    lightBuffer = device.CreateBuffer(&lightBufferDesc);
+    m_lightBuffer = m_device.CreateBuffer(&lightBufferDesc);
 }
 
 void Renderer::initRenderPipeline(wgpu::ShaderModule shader) {
@@ -624,7 +635,7 @@ void Renderer::initRenderPipeline(wgpu::ShaderModule shader) {
 
     wgpu::RenderPipelineDescriptor pipelineDesc{};
     pipelineDesc.nextInChain = nullptr;
-    pipelineDesc.layout = pipelineLayout;
+    pipelineDesc.layout = m_pipelineLayout;
 
     wgpu::VertexBufferLayout vertexBufferLayout{};
 
@@ -679,7 +690,7 @@ void Renderer::initRenderPipeline(wgpu::ShaderModule shader) {
     blendState.alpha.dstFactor = wgpu::BlendFactor::One;
     blendState.alpha.operation = wgpu::BlendOperation::Add;
     wgpu::ColorTargetState colorTarget{};
-    colorTarget.format = surfaceFormat;
+    colorTarget.format = m_surfaceFormat;
     colorTarget.blend = &blendState;
     colorTarget.writeMask = wgpu::ColorWriteMask::All;
 
@@ -694,32 +705,33 @@ void Renderer::initRenderPipeline(wgpu::ShaderModule shader) {
     depthStencilState.depthWriteEnabled =
         true;  // overwrite value = a if a less than b. Can deactivate when
                // rendering user interface for example
-    depthTextureFormat = wgpu::TextureFormat::Depth24Plus;
-    depthStencilState.format = depthTextureFormat;
+    m_depthTextureFormat = wgpu::TextureFormat::Depth24Plus;
+    depthStencilState.format = m_depthTextureFormat;
     depthStencilState.stencilReadMask = 0;
     depthStencilState.stencilWriteMask = 0;
 
-    depthTextureDescriptor = {};
-    depthTextureDescriptor.dimension = wgpu::TextureDimension::e2D;
-    depthTextureDescriptor.format = depthTextureFormat;
-    depthTextureDescriptor.mipLevelCount = 1;
-    depthTextureDescriptor.sampleCount = 4;
-    depthTextureDescriptor.size = {surfaceConfig.width, surfaceConfig.height,
-                                   1};
-    depthTextureDescriptor.usage = wgpu::TextureUsage::RenderAttachment;
-    depthTextureDescriptor.viewFormatCount = 1;
-    depthTextureDescriptor.viewFormats = &depthTextureFormat;
-    depthTexture = device.CreateTexture(&depthTextureDescriptor);
+    m_depthTextureDescriptor = {};
+    m_depthTextureDescriptor.dimension = wgpu::TextureDimension::e2D;
+    m_depthTextureDescriptor.format = m_depthTextureFormat;
+    m_depthTextureDescriptor.mipLevelCount = 1;
+    m_depthTextureDescriptor.sampleCount = 4;
+    m_depthTextureDescriptor.size = {m_surfaceConfig.width,
+                                     m_surfaceConfig.height, 1};
+    m_depthTextureDescriptor.usage = wgpu::TextureUsage::RenderAttachment;
+    m_depthTextureDescriptor.viewFormatCount = 1;
+    m_depthTextureDescriptor.viewFormats = &m_depthTextureFormat;
+    m_depthTexture = m_device.CreateTexture(&m_depthTextureDescriptor);
 
     wgpu::TextureDescriptor msaaDesc{};
-    msaaDesc.size = {surfaceConfig.width, surfaceConfig.height, 1};
+    msaaDesc.size = {m_surfaceConfig.width, m_surfaceConfig.height, 1};
     msaaDesc.sampleCount = 4;
-    msaaDesc.format = surfaceFormat;
+    msaaDesc.format = m_surfaceFormat;
     msaaDesc.usage = wgpu::TextureUsage::RenderAttachment;
-    msaaTexture = device.CreateTexture(&msaaDesc);
-    msaaTextureView = msaaTexture.CreateView();
+    m_msaaTexture = m_device.CreateTexture(&msaaDesc);
+    m_msaaTextureView = m_msaaTexture.CreateView();
 
-    depthTextureView = depthTexture.CreateView(&depthTextureViewDescriptor);
+    m_depthTextureView =
+        m_depthTexture.CreateView(&m_depthTextureViewDescriptor);
 
     pipelineDesc.depthStencil = &depthStencilState;
 
@@ -727,7 +739,7 @@ void Renderer::initRenderPipeline(wgpu::ShaderModule shader) {
     pipelineDesc.multisample.mask = ~0u;
     pipelineDesc.multisample.alphaToCoverageEnabled = false;
 
-    renderPipeline = device.CreateRenderPipeline(&pipelineDesc);
+    m_renderPipeline = m_device.CreateRenderPipeline(&pipelineDesc);
 }
 
 void Renderer::initSampler() {
@@ -742,7 +754,7 @@ void Renderer::initSampler() {
     samplerDescriptor.lodMaxClamp = 8.0f;
     samplerDescriptor.compare = wgpu::CompareFunction::Undefined;
     samplerDescriptor.maxAnisotropy = 16;
-    sampler = device.CreateSampler(&samplerDescriptor);
+    m_sampler = m_device.CreateSampler(&samplerDescriptor);
 }
 
 }  // namespace C2Lux

@@ -4,49 +4,49 @@
 
 namespace C2Lux {
 
-Window::Window(GLFWwindow* window_) {
-    window = window_;
+Window::Window(GLFWwindow* window) {
+    m_window = window;
 }
     
 Window::~Window() {
-    glfwDestroyWindow(window);
+    glfwDestroyWindow(m_window);
     
 }
 
 Window::Window(Window&& other) noexcept {
     if (this != &other) {
-        window = other.window;
-        height = other.height;
-        width = other.width;
-        name = other.name;
+        m_window = other.m_window;
+        m_height = other.m_height;
+        m_width = other.m_width;
+        m_title = other.m_title;
 
-        other.window = nullptr;
-        other.height = -1;
-        other.width = -1;
-        other.name = "";
+        other.m_window = nullptr;
+        other.m_height = -1;
+        other.m_width = -1;
+        other.m_title = "";
     }
 }
 
 Window& Window::operator=(Window&& other) noexcept {
     if (this != &other) {
-        glfwDestroyWindow(window);
-        window = other.window;
-        height = other.height;
-        width = other.width;
-        name = other.name;
+        glfwDestroyWindow(m_window);
+        m_window = other.m_window;
+        m_height = other.m_height;
+        m_width = other.m_width;
+        m_title = other.m_title;
 
-        other.window = nullptr;
-        other.height = -1;
-        other.width = -1;
-        other.name = "";
+        other.m_window = nullptr;
+        other.m_height = -1;
+        other.m_width = -1;
+        other.m_title = "";
     }
     return *this;
 }
 
-std::unique_ptr<Window> Window::create(int width_, int height_, std::string name_) {
+std::unique_ptr<Window> Window::create(int width, int height, std::string title) {
     //glfwWindowHintString(GLFW_WAYLAND_APP_ID, "c2lux.viewer");
 
-    GLFWwindow* glfwWindow = glfwCreateWindow(width_, height_, name_.c_str(), nullptr, nullptr);
+    GLFWwindow* glfwWindow = glfwCreateWindow(width, height, title.c_str(), nullptr, nullptr);
     if (!glfwWindow) {
         return nullptr;
     } else {
@@ -78,37 +78,37 @@ void Window::pollEvents() {
 
 void Window::toggleFullscreen()
 {
-    if (!isFullscreen) {
-        glfwGetWindowPos(window, &savedX, &savedY);
-        glfwGetWindowSize(window, &savedWidth, &savedHeight);
+    if (!m_isFullscreen) {
+        glfwGetWindowPos(m_window, &m_savedX, &m_savedY);
+        glfwGetWindowSize(m_window, &m_savedWidth, &m_savedHeight);
 
         GLFWmonitor* monitor = glfwGetPrimaryMonitor();
         const GLFWvidmode* mode = glfwGetVideoMode(monitor);
 
-        glfwSetWindowMonitor(window, monitor, 0, 0, mode->width, mode->height, mode->refreshRate);
-        isFullscreen = true;
+        glfwSetWindowMonitor(m_window, monitor, 0, 0, mode->width, mode->height, mode->refreshRate);
+        m_isFullscreen = true;
     }
     else {
-        glfwSetWindowMonitor(window, nullptr, savedX, savedY, savedWidth, savedHeight, 0);
-        isFullscreen = false;
+        glfwSetWindowMonitor(m_window, nullptr, m_savedX, m_savedY, m_savedWidth, m_savedHeight, 0);
+        m_isFullscreen = false;
     }
 }
 
 float Window::getAndResetScrollDelta()
 {
-    float d = scrollDelta;
-    scrollDelta = 0.0f;
+    float d = m_scrollDelta;
+    m_scrollDelta = 0.0f;
     return d;   
 }
 
 bool Window::shouldClose() {
-    return glfwWindowShouldClose(window);
+    return glfwWindowShouldClose(m_window);
 }
 
 std::pair<int, int> Window::getFramebufferSize() {
-    int width, height;
-    glfwGetFramebufferSize(window, &width, &height);
-    return std::pair<int, int>(width, height);
+    int framebufferWidth, framebufferHeight;
+    glfwGetFramebufferSize(m_window, &framebufferWidth, &framebufferHeight);
+    return std::pair<int, int>(framebufferWidth, framebufferHeight);
 }
 
 } // namespace C2Lux

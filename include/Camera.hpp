@@ -22,20 +22,20 @@ public:
     void debug() const;
 
 private:
-    glm::vec3 position;
-    glm::vec3 front;
-    glm::vec3 up;
-    glm::vec3 right;
-    glm::vec3 worldUp;
+    glm::vec3 m_position;
+    glm::vec3 m_front;
+    glm::vec3 m_up;
+    glm::vec3 m_right;
+    glm::vec3 m_worldUp;
 
-    float yaw;
-    float pitch;
+    float m_yawDegrees;
+    float m_pitchDegrees;
 
-    float movementSpeed;
-    float mouseSensitivity;
-    float fov;
+    float m_movementSpeed;
+    float m_mouseSensitivity;
+    float m_fovDegrees;
 public:
-    glm::vec3 getPosition() const { return position; }
+    glm::vec3 getPosition() const { return m_position; }
 };
 
 } // namespace C2Lux
