@@ -247,11 +247,9 @@ bool Renderer::setupSurfaceConfig(int width, int height) {
 }
 
 void Renderer::draw(UILayer& ui, const Camera& camera, const Scene& scene) {
-    if (scene.objects.size() == 0) {
-        drawJustUI(ui);
-        return;
-    } else if (scene.objects.size() > 2) {
-        std::cerr << "Object greater than: 2" << '\n';
+    if (scene.objects.size() == 0 || scene.objects.size() > m_objectCapacity) {
+        std::cerr << "Incorrect objects size: " << scene.objects.size()
+                  << ". Max: " << m_objectCapacity << '\n';
         drawJustUI(ui);
         return;
     }
@@ -619,7 +617,7 @@ bool Renderer::initBuffers() {
 
     wgpu::BufferDescriptor uniformBufferDesc{};
     uniformBufferDesc.nextInChain = nullptr;
-    uniformBufferDesc.size = 2ull * m_uniformStride;
+    uniformBufferDesc.size = m_objectCapacity * m_uniformStride;
     uniformBufferDesc.label = "Uniforms buffer";
     uniformBufferDesc.mappedAtCreation = false;
     uniformBufferDesc.usage =

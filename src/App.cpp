@@ -1,5 +1,6 @@
 #include "App.hpp"
 
+#include <glm/ext/scalar_constants.hpp>
 #include <glm/gtc/matrix_transform.hpp>
 
 #include "ResourceManager.hpp"
@@ -271,6 +272,8 @@ float App::getDeltaTime() const {
 void App::buildTestScene(uint32_t meshId) {
     m_scene.objects.clear();
 
+    /*
+
     SceneObject obj1 = {};
     obj1.meshId = meshId;
     obj1.model = glm::mat4(1.0f);
@@ -281,6 +284,29 @@ void App::buildTestScene(uint32_t meshId) {
 
     m_scene.objects.push_back(obj1);
     m_scene.objects.push_back(obj2);
+
+    SceneObject obj3 = {};
+    obj3.meshId = meshId;
+    obj3.model = glm::translate(glm::mat4(1.0f), glm::vec3(10.0f, 0.0f, 0.0f));
+    m_scene.objects.push_back(obj3);
+
+    */
+
+    std::size_t N = 12;
+    const float radius = 12;
+
+    for (std::size_t i = 0; i < N; i++) {
+        const float angle = 2 * glm::pi<float>() * static_cast<float>(i) / N;
+
+        const float x = radius * glm::cos(angle);
+        const float z = radius * glm::sin(angle);
+
+        SceneObject obj = {};
+        obj.meshId = meshId;
+        obj.model = glm::translate(glm::mat4(1.0f), glm::vec3(x, 0, z));
+
+        m_scene.objects.push_back(obj);
+    }
 }
 
 }  // namespace C2Lux

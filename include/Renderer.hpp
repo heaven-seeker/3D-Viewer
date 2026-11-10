@@ -88,6 +88,8 @@ class Renderer {
 
     uint64_t m_uniformStride = 0;
 
+    std::size_t m_objectCapacity = 64;
+
    public:
     const wgpu::Instance& getInstance() const { return m_instance; }
     const wgpu::Device& getDevice() const { return m_device; }
