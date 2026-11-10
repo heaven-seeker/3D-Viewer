@@ -57,6 +57,8 @@ set(SOURCES
     src/Renderer.cpp
     src/ResourceManager.cpp
     src/Mesh.cpp
+    src/Scene.cpp
+    src/MeshResource.cpp
 )
 
 add_executable(${APP_NAME} ${SOURCES} "src/UILayer.cpp" "src/Camera.cpp")

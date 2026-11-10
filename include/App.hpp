@@ -7,7 +7,9 @@
 #include "Window.hpp"
 
 // std
+#include <cstdint>
 #include <memory>
+#include <optional>
 
 namespace C2Lux {
 
@@ -40,10 +42,10 @@ class App {
    public:
     float getDeltaTime() const;
 
-    Mesh m_currentMesh;
-
     AppState getAppState() const { return m_appState; }
     void setAppState(AppState newState) { m_appState = newState; }
+
+    std::optional<uint32_t> m_currentMeshId;
 };
 
 }  // namespace C2Lux

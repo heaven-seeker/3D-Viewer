@@ -149,10 +149,14 @@ void App::renderFrame() {
                 } else if (!result.mesh->validate()) {
                     std::cerr << "Loaded mesh failed validation\n";
                 } else {
-                    m_appState = AppState::Viewing;
-                    m_currentMesh = std::move(*result.mesh);
-                    m_renderer.updateMeshBuffers(m_currentMesh);
-                    m_uiLayer.resetMaterialSelection();
+                    auto meshId = m_renderer.addMesh(std::move(*result.mesh));
+                    if (meshId) {
+                        m_currentMeshId = *meshId;
+                        m_appState = AppState::Viewing;
+                        m_uiLayer.resetMaterialSelection();
+                    } else {
+                        std::cerr << "Incorrect mesh ID" << '\n';
+                    }
                 }
             }
             m_renderer.drawJustUI(m_uiLayer);
@@ -165,28 +169,42 @@ void App::renderFrame() {
             std::string path = m_uiLayer.buildUI();
             if (!path.empty()) {
                 auto result = ResourceManager::getInstance().loadObj(path);
-
                 if (!result.mesh) {
                     std::cerr << result.error << '\n';
                 } else if (!result.mesh->validate()) {
                     std::cerr << "Loaded mesh failed validation\n";
                 } else {
-                    m_currentMesh = std::move(*result.mesh);
-                    m_renderer.updateMeshBuffers(m_currentMesh);
-                    m_uiLayer.resetMaterialSelection();
+                    auto meshId = m_renderer.addMesh(std::move(*result.mesh));
+                    if (meshId) {
+                        m_currentMeshId = *meshId;
+                        m_uiLayer.resetMaterialSelection();
+                    } else {
+                        std::cerr << "Incorrect mesh ID" << '\n';
+                    }
                 }
             }
 
-            if (auto changedId = m_uiLayer.drawMaterialEditor(m_currentMesh)) {
-                const Material& material =
-                    m_currentMesh.getMaterials()[*changedId];
+            if (!m_currentMeshId) {
+                m_renderer.drawJustUI(m_uiLayer);
+                break;
+            }
 
-                if (!m_renderer.updateMaterial(*changedId, material)) {
+            Mesh* mesh = m_renderer.getMesh(*m_currentMeshId);
+            if (!mesh) {
+                m_renderer.drawJustUI(m_uiLayer);
+                break;
+            }
+
+            if (auto changedId = m_uiLayer.drawMaterialEditor(*mesh)) {
+                const Material& material = mesh->getMaterials()[*changedId];
+
+                if (!m_renderer.updateMaterial(*m_currentMeshId, *changedId,
+                                               material)) {
                     std::cerr << "Can't change material" << '\n';
                 };
             }
 
-            m_renderer.draw(m_uiLayer, m_camera, m_currentMesh);
+            m_renderer.draw(m_uiLayer, m_camera, *m_currentMeshId);
             break;
         }
     }

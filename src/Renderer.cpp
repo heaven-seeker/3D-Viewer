@@ -247,7 +247,14 @@ bool Renderer::setupSurfaceConfig(int width, int height) {
     return true;
 }
 
-void Renderer::draw(UILayer& ui, const Camera& camera, const Mesh& mesh) {
+void Renderer::draw(UILayer& ui, const Camera& camera, uint32_t meshId) {
+    if (meshId >= m_meshResources.size()) {
+        drawJustUI(ui);
+        return;
+    }
+
+    const MeshResource& resource = m_meshResources[meshId];
+
     Uniforms uniforms{};
     uniforms.time = static_cast<float>(glfwGetTime());
     uniforms.modelMatrix = glm::mat4(1.0f);
@@ -306,18 +313,20 @@ void Renderer::draw(UILayer& ui, const Camera& camera, const Mesh& mesh) {
 
     wgpu::RenderPassEncoder pass1 = encoder.BeginRenderPass(&pass1Desc);
     pass1.SetPipeline(m_renderPipeline);
-    if (m_indexCount > 0 && m_vertexBuffer && m_indexBuffer) {
-        pass1.SetVertexBuffer(0, m_vertexBuffer);
+    if (resource.indexCount > 0 && resource.vertexBuffer &&
+        resource.indexBuffer) {
+        pass1.SetVertexBuffer(0, resource.vertexBuffer);
         pass1.SetIndexBuffer(
-            m_indexBuffer, wgpu::IndexFormat::Uint32, 0,
-            static_cast<uint64_t>(m_indexCount) * sizeof(uint32_t));
+            resource.indexBuffer, wgpu::IndexFormat::Uint32, 0,
+            static_cast<uint64_t>(resource.indexCount) * sizeof(uint32_t));
         pass1.SetBindGroup(0, m_bindGroups[0]);
         pass1.SetBindGroup(1, m_bindGroups[1]);
 
-        for (const auto& submesh : mesh.getSubMeshes()) {
+        for (const auto& submesh : resource.model.getSubMeshes()) {
             // Same buffer and bind group, but a different material window.
-            const uint32_t offset = getMaterialOffset(submesh.materialId);
-            pass1.SetBindGroup(2, m_materialBindGroup, 1, &offset);
+            const uint32_t offset =
+                getMaterialOffset(resource, submesh.materialId);
+            pass1.SetBindGroup(2, resource.materialBindGroup, 1, &offset);
             pass1.DrawIndexed(submesh.indexCount, 1, submesh.startIndex, 0, 0);
         }
     }
@@ -461,7 +470,7 @@ void Renderer::resizeSurface(int width, int height) {
     m_depthTextureView = m_depthTexture.CreateView();
 }
 
-bool Renderer::updateMaterialBuffer(const Mesh& model) {
+bool Renderer::updateMaterialBuffer(const Mesh& model, MeshResource& resource) {
     wgpu::Limits limits{};
     if (m_device.GetLimits(&limits) != wgpu::Status::Success) {
         std::cerr << "Could not query material buffer alignment." << std::endl;
@@ -471,21 +480,21 @@ bool Renderer::updateMaterialBuffer(const Mesh& model) {
     // Payload size and slot spacing differ: each dynamic offset must satisfy
     // the device's uniform-buffer offset alignment.
     const uint32_t alignment = limits.minUniformBufferOffsetAlignment;
-    m_materialStride = static_cast<uint32_t>(
+    resource.materialStride = static_cast<uint32_t>(
         (sizeof(MaterialUniforms) + alignment - 1) / alignment * alignment);
 
     const size_t materialCount = model.getMaterials().size();
     const uint64_t slotCount =
         static_cast<uint64_t>(materialCount) + 1;  // + 1 default white material
     if (materialCount >
-            std::numeric_limits<uint32_t>::max() / m_materialStride ||
-        slotCount > limits.maxBufferSize / m_materialStride) {
+            std::numeric_limits<uint32_t>::max() / resource.materialStride ||
+        slotCount > limits.maxBufferSize / resource.materialStride) {
         std::cerr
             << "Materials exceed the device's dynamic uniform buffer limits."
             << std::endl;
         return false;
     }
-    const uint64_t bufferSize = slotCount * m_materialStride;
+    const uint64_t bufferSize = slotCount * resource.materialStride;
 
     // Pack all colors once on upload. Slot 0 is the white fallback.
     std::vector<uint8_t> data(static_cast<size_t>(bufferSize), 0);
@@ -499,7 +508,7 @@ bool Renderer::updateMaterialBuffer(const Mesh& model) {
         uniforms.specularStrength = material.specularStrength;
         uniforms.specularColor = material.specularColor;
 
-        std::memcpy(data.data() + (i + 1) * m_materialStride, &uniforms,
+        std::memcpy(data.data() + (i + 1) * resource.materialStride, &uniforms,
                     sizeof(uniforms));
     }
 
@@ -508,12 +517,12 @@ bool Renderer::updateMaterialBuffer(const Mesh& model) {
     bufferDescriptor.size = bufferSize;
     bufferDescriptor.usage =
         wgpu::BufferUsage::Uniform | wgpu::BufferUsage::CopyDst;
-    m_materialBuffer = m_device.CreateBuffer(&bufferDescriptor);
-    m_queue.WriteBuffer(m_materialBuffer, 0, data.data(), data.size());
+    resource.materialBuffer = m_device.CreateBuffer(&bufferDescriptor);
+    m_queue.WriteBuffer(resource.materialBuffer, 0, data.data(), data.size());
 
     wgpu::BindGroupEntry binding{};
     binding.binding = 0;
-    binding.buffer = m_materialBuffer;
+    binding.buffer = resource.materialBuffer;
     binding.offset = 0;
     // This is the shader-visible window size, NOT the whole buffer size.
     binding.size = sizeof(MaterialUniforms);
@@ -523,20 +532,29 @@ bool Renderer::updateMaterialBuffer(const Mesh& model) {
     bindGroupDescriptor.layout = m_bindGroupLayouts[2];
     bindGroupDescriptor.entryCount = 1;
     bindGroupDescriptor.entries = &binding;
-    m_materialBindGroup = m_device.CreateBindGroup(&bindGroupDescriptor);
-    m_materialCount = materialCount;
+    resource.materialBindGroup = m_device.CreateBindGroup(&bindGroupDescriptor);
+    resource.materialCount = materialCount;
     return true;
 }
 
-uint32_t Renderer::getMaterialOffset(int materialId) const {
-    if (materialId < 0 || static_cast<size_t>(materialId) >= m_materialCount) {
+uint32_t Renderer::getMaterialOffset(const MeshResource& resource,
+                                     int materialId) const {
+    if (materialId < 0 ||
+        static_cast<size_t>(materialId) >= resource.materialCount) {
         return 0;
     }
-    return (static_cast<uint32_t>(materialId) + 1) * m_materialStride;
+    return (static_cast<uint32_t>(materialId) + 1) * resource.materialStride;
 }
 
-bool Renderer::updateMaterial(uint32_t materialId, const Material& material) {
-    if (!m_materialBuffer || materialId >= m_materialCount) {
+bool Renderer::updateMaterial(uint32_t meshId, uint32_t materialId,
+                              const Material& material) {
+    if (meshId >= m_meshResources.size()) {
+        return false;
+    }
+
+    MeshResource& resource = m_meshResources[meshId];
+
+    if (!resource.materialBuffer || materialId >= resource.materialCount) {
         return false;
     }
 
@@ -547,69 +565,20 @@ bool Renderer::updateMaterial(uint32_t materialId, const Material& material) {
     uniforms.specularColor = material.specularColor;
 
     const uint64_t offset =
-        (static_cast<uint64_t>(materialId) + 1) * m_materialStride;
+        (static_cast<uint64_t>(materialId) + 1) * resource.materialStride;
 
-    m_queue.WriteBuffer(m_materialBuffer, offset, &uniforms, sizeof(uniforms));
+    m_queue.WriteBuffer(resource.materialBuffer, offset, &uniforms,
+                        sizeof(uniforms));
 
     return true;
 }
 
 void Renderer::updateMeshBuffers(const Mesh& model) {
-    if (!updateMaterialBuffer(model)) {
+    MeshResource& resource = m_meshResource;
+    if (!uploadMeshResource(model, resource)) {
         m_hasFailed = true;
-        m_indexCount = 0;
-        return;
+        resource.indexCount = 0;
     }
-
-    if (!m_vertexBuffer ||
-        model.getVertexData().size() >= m_vertexBufferCapacity) {
-        if (model.getVertexData().size() >= m_vertexBufferCapacity) {
-            m_vertexBufferCapacity =
-                model.getVertexData().size() + model.getVertexData().size() / 2;
-        }
-        if (m_vertexBuffer) {
-            m_vertexBuffer.Destroy();
-        }
-
-        wgpu::BufferDescriptor bufferDesc{};
-        bufferDesc.nextInChain = nullptr;
-        bufferDesc.size = m_vertexBufferCapacity * sizeof(VertexAttributes);
-        bufferDesc.label = "Vertex buffer";
-        bufferDesc.usage =
-            wgpu::BufferUsage::CopyDst | wgpu::BufferUsage::Vertex;
-        bufferDesc.mappedAtCreation = false;
-        m_vertexBuffer = m_device.CreateBuffer(&bufferDesc);
-    }
-
-    if (!m_indexBuffer ||
-        model.getIndexData().size() >= m_indexBufferCapacity) {
-        if (model.getIndexData().size() >= m_indexBufferCapacity) {
-            m_indexBufferCapacity =
-                model.getIndexData().size() + model.getIndexData().size() / 2;
-        }
-        if (m_indexBuffer) {
-            m_indexBuffer.Destroy();
-        }
-
-        wgpu::BufferDescriptor indexBufferDesc{};
-        indexBufferDesc.nextInChain = nullptr;
-        indexBufferDesc.size =
-            m_indexBufferCapacity *
-            sizeof(uint32_t);  // default m_indexBufferCapacity
-        indexBufferDesc.label = "Index buffer";
-        indexBufferDesc.usage =
-            wgpu::BufferUsage::CopyDst | wgpu::BufferUsage::Index;
-        indexBufferDesc.mappedAtCreation = false;
-        m_indexBuffer = m_device.CreateBuffer(&indexBufferDesc);
-    }
-
-    m_queue.WriteBuffer(
-        m_vertexBuffer, 0, model.getVertexData().data(),
-        model.getVertexData().size() * sizeof(VertexAttributes));
-
-    m_queue.WriteBuffer(m_indexBuffer, 0, model.getIndexData().data(),
-                        model.getIndexData().size() * sizeof(uint32_t));
-    m_indexCount = static_cast<uint32_t>(model.getIndexData().size());
 }
 
 void Renderer::initBuffers() {
@@ -630,6 +599,65 @@ void Renderer::initBuffers() {
     lightBufferDesc.usage =
         wgpu::BufferUsage::CopyDst | wgpu::BufferUsage::Uniform;
     m_lightBuffer = m_device.CreateBuffer(&lightBufferDesc);
+}
+
+bool Renderer::uploadMeshResource(const Mesh& model, MeshResource& resource) {
+    if (!updateMaterialBuffer(model, resource)) {
+        resource.indexCount = 0;
+        return false;
+    }
+
+    if (!resource.vertexBuffer ||
+        model.getVertexData().size() >= resource.vertexCapacity) {
+        if (model.getVertexData().size() >= resource.vertexCapacity) {
+            resource.vertexCapacity =
+                model.getVertexData().size() + model.getVertexData().size() / 2;
+        }
+        if (resource.vertexBuffer) {
+            resource.vertexBuffer.Destroy();
+        }
+
+        wgpu::BufferDescriptor bufferDesc{};
+        bufferDesc.nextInChain = nullptr;
+        bufferDesc.size = resource.vertexCapacity * sizeof(VertexAttributes);
+        bufferDesc.label = "Vertex buffer";
+        bufferDesc.usage =
+            wgpu::BufferUsage::CopyDst | wgpu::BufferUsage::Vertex;
+        bufferDesc.mappedAtCreation = false;
+        resource.vertexBuffer = m_device.CreateBuffer(&bufferDesc);
+    }
+
+    if (!resource.indexBuffer ||
+        model.getIndexData().size() >= resource.indexCapacity) {
+        if (model.getIndexData().size() >= resource.indexCapacity) {
+            resource.indexCapacity =
+                model.getIndexData().size() + model.getIndexData().size() / 2;
+        }
+        if (resource.indexBuffer) {
+            resource.indexBuffer.Destroy();
+        }
+
+        wgpu::BufferDescriptor indexBufferDesc{};
+        indexBufferDesc.nextInChain = nullptr;
+        indexBufferDesc.size =
+            resource.indexCapacity *
+            sizeof(uint32_t);  // default m_indexBufferCapacity
+        indexBufferDesc.label = "Index buffer";
+        indexBufferDesc.usage =
+            wgpu::BufferUsage::CopyDst | wgpu::BufferUsage::Index;
+        indexBufferDesc.mappedAtCreation = false;
+        resource.indexBuffer = m_device.CreateBuffer(&indexBufferDesc);
+    }
+
+    m_queue.WriteBuffer(
+        resource.vertexBuffer, 0, model.getVertexData().data(),
+        model.getVertexData().size() * sizeof(VertexAttributes));
+
+    m_queue.WriteBuffer(resource.indexBuffer, 0, model.getIndexData().data(),
+                        model.getIndexData().size() * sizeof(uint32_t));
+    resource.indexCount = static_cast<uint32_t>(model.getIndexData().size());
+
+    return true;
 }
 
 void Renderer::initRenderPipeline(wgpu::ShaderModule shader) {
@@ -777,6 +805,27 @@ void Renderer::initSampler() {
     samplerDescriptor.compare = wgpu::CompareFunction::Undefined;
     samplerDescriptor.maxAnisotropy = 16;
     m_sampler = m_device.CreateSampler(&samplerDescriptor);
+}
+
+std::optional<uint32_t> Renderer::addMesh(Mesh mesh) {
+    if (mesh.validate()) {
+        MeshResource meshResource;
+        meshResource.model = std::move(mesh);
+        if (!uploadMeshResource(meshResource.model, meshResource)) {
+            return std::nullopt;
+        }
+        uint32_t id = static_cast<uint32_t>(m_meshResources.size());
+        m_meshResources.push_back(std::move(meshResource));
+        return id;
+    }
+    return std::nullopt;
+}
+
+Mesh* Renderer::getMesh(uint32_t meshId) {
+    if (meshId >= m_meshResources.size()) {
+        return nullptr;
+    }
+    return &m_meshResources[meshId].model;
 }
 
 }  // namespace C2Lux

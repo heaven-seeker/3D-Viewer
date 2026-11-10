@@ -1,5 +1,8 @@
 #pragma once
 
+#include <MeshResource.hpp>
+#include <optional>
+
 #include "Camera.hpp"
 #include "Mesh.hpp"
 #include "glfw3webgpu.h"
@@ -36,15 +39,24 @@ class Renderer {
 
     wgpu::TextureView acquireSurfaceTextureView();
 
-    void draw(UILayer& ui, const Camera& camera, const Mesh& mesh);
+    void draw(UILayer& ui, const Camera& camera, uint32_t meshId);
 
     void drawJustUI(UILayer& ui);
 
-    bool updateMaterial(uint32_t materialId, const Material& material);
+    bool updateMaterial(uint32_t meshId, uint32_t materialId,
+                        const Material& material);
+
+    std::optional<uint32_t> addMesh(Mesh mesh);
+    Mesh* getMesh(uint32_t meshId);
 
    private:
-    bool updateMaterialBuffer(const Mesh& model);
-    uint32_t getMaterialOffset(int materialId) const;
+    MeshResource m_meshResource;
+    std::vector<MeshResource> m_meshResources;
+
+    bool updateMaterialBuffer(const Mesh& model, MeshResource& resource);
+    uint32_t getMaterialOffset(const MeshResource& resource,
+                               int materialId) const;
+    bool uploadMeshResource(const Mesh& model, MeshResource& resource);
 
     wgpu::Instance m_instance;
     wgpu::Device m_device;
@@ -55,24 +67,11 @@ class Renderer {
 
     bool m_hasFailed = false;
 
-    wgpu::Buffer m_vertexBuffer;
-    size_t m_vertexBufferCapacity = 1024;
-
-    wgpu::Buffer m_indexBuffer;
-    size_t m_indexBufferCapacity = 1024;
-    uint32_t m_indexCount = 0;
-
     wgpu::Buffer m_uniformBuffer;
     wgpu::Buffer m_lightBuffer;
     std::vector<wgpu::BindGroupLayout> m_bindGroupLayouts;
     wgpu::PipelineLayout m_pipelineLayout;
     std::vector<wgpu::BindGroup> m_bindGroups;
-
-    // Slot 0 is white; material i occupies slot i + 1 in this shared buffer.
-    wgpu::Buffer m_materialBuffer;
-    wgpu::BindGroup m_materialBindGroup;
-    uint32_t m_materialStride = 0;
-    size_t m_materialCount = 0;
 
     wgpu::RenderPipeline m_renderPipeline;
 
