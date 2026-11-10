@@ -1,5 +1,7 @@
 #pragma once
 
+#include <Scene.hpp>
+
 #include "Camera.hpp"
 #include "Mesh.hpp"
 #include "Renderer.hpp"
@@ -28,6 +30,7 @@ class App {
     bool handleWindowEvents();
 
    private:
+    Scene m_scene;
     std::unique_ptr<Window> m_mainWindow;
     Renderer m_renderer;
     UILayer m_uiLayer;
@@ -36,6 +39,7 @@ class App {
 
     bool m_isRunning;
 
+    void buildTestScene(uint32_t meshId);
     void processInput(float deltaTime);
     void renderFrame();
 

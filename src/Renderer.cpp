@@ -144,8 +144,7 @@ void Renderer::initBindGroups() {
         wgpu::ShaderStage::Vertex | wgpu::ShaderStage::Fragment;
     uniformBindingLayout.buffer.type = wgpu::BufferBindingType::Uniform;
     uniformBindingLayout.buffer.minBindingSize = sizeof(Uniforms);
-    uniformBindingLayout.buffer.hasDynamicOffset =
-        false;  // NOTE: Need change in future
+    uniformBindingLayout.buffer.hasDynamicOffset = true;
 
     // Light
     wgpu::BindGroupLayoutEntry lightBindingLayout = {};
@@ -247,13 +246,15 @@ bool Renderer::setupSurfaceConfig(int width, int height) {
     return true;
 }
 
-void Renderer::draw(UILayer& ui, const Camera& camera, uint32_t meshId) {
-    if (meshId >= m_meshResources.size()) {
+void Renderer::draw(UILayer& ui, const Camera& camera, const Scene& scene) {
+    if (scene.objects.size() == 0) {
+        drawJustUI(ui);
+        return;
+    } else if (scene.objects.size() > 2) {
+        std::cerr << "Object greater than: 2" << '\n';
         drawJustUI(ui);
         return;
     }
-
-    const MeshResource& resource = m_meshResources[meshId];
 
     Uniforms uniforms{};
     uniforms.time = static_cast<float>(glfwGetTime());
@@ -273,7 +274,15 @@ void Renderer::draw(UILayer& ui, const Camera& camera, uint32_t meshId) {
     lightData.intensity = ui.m_lightIntensity;
 
     m_queue.WriteBuffer(m_lightBuffer, 0, &lightData, sizeof(LightData));
-    m_queue.WriteBuffer(m_uniformBuffer, 0, &uniforms, sizeof(Uniforms));
+
+    for (std::size_t i = 0; i < scene.objects.size(); i++) {
+        uniforms.modelMatrix = scene.objects[i].model;
+
+        const uint64_t offset = static_cast<uint64_t>(i) * m_uniformStride;
+
+        m_queue.WriteBuffer(m_uniformBuffer, offset, &uniforms,
+                            sizeof(Uniforms));
+    }
 
     wgpu::TextureView targetView = acquireSurfaceTextureView();
     if (!targetView) {
@@ -313,23 +322,39 @@ void Renderer::draw(UILayer& ui, const Camera& camera, uint32_t meshId) {
 
     wgpu::RenderPassEncoder pass1 = encoder.BeginRenderPass(&pass1Desc);
     pass1.SetPipeline(m_renderPipeline);
-    if (resource.indexCount > 0 && resource.vertexBuffer &&
-        resource.indexBuffer) {
-        pass1.SetVertexBuffer(0, resource.vertexBuffer);
-        pass1.SetIndexBuffer(
-            resource.indexBuffer, wgpu::IndexFormat::Uint32, 0,
-            static_cast<uint64_t>(resource.indexCount) * sizeof(uint32_t));
-        pass1.SetBindGroup(0, m_bindGroups[0]);
-        pass1.SetBindGroup(1, m_bindGroups[1]);
 
-        for (const auto& submesh : resource.model.getSubMeshes()) {
-            // Same buffer and bind group, but a different material window.
-            const uint32_t offset =
-                getMaterialOffset(resource, submesh.materialId);
-            pass1.SetBindGroup(2, resource.materialBindGroup, 1, &offset);
-            pass1.DrawIndexed(submesh.indexCount, 1, submesh.startIndex, 0, 0);
+    for (std::size_t i = 0; i < scene.objects.size(); i++) {
+        const auto& object = scene.objects[i];
+
+        if (object.meshId >= m_meshResources.size()) {
+            std::cerr << "Incorrect mesh Id: " << object.meshId << '\n';
+            continue;
+        }
+        const MeshResource& resource = m_meshResources[object.meshId];
+
+        if (resource.indexCount > 0 && resource.vertexBuffer &&
+            resource.indexBuffer) {
+            pass1.SetVertexBuffer(0, resource.vertexBuffer);
+            pass1.SetIndexBuffer(
+                resource.indexBuffer, wgpu::IndexFormat::Uint32, 0,
+                static_cast<uint64_t>(resource.indexCount) * sizeof(uint32_t));
+
+            const uint32_t objectOffset =
+                static_cast<uint32_t>(i * m_uniformStride);
+            pass1.SetBindGroup(0, m_bindGroups[0], 1, &objectOffset);
+            pass1.SetBindGroup(1, m_bindGroups[1]);
+
+            for (const auto& submesh : resource.model.getSubMeshes()) {
+                // Same buffer and bind group, but a different material window.
+                const uint32_t offset =
+                    getMaterialOffset(resource, submesh.materialId);
+                pass1.SetBindGroup(2, resource.materialBindGroup, 1, &offset);
+                pass1.DrawIndexed(submesh.indexCount, 1, submesh.startIndex, 0,
+                                  0);
+            }
         }
     }
+
     pass1.End();
 
     /* Render imGui UI */
@@ -581,10 +606,20 @@ void Renderer::updateMeshBuffers(const Mesh& model) {
     }
 }
 
-void Renderer::initBuffers() {
+bool Renderer::initBuffers() {
+    wgpu::Limits limits{};
+    if (m_device.GetLimits(&limits) != wgpu::Status::Success) {
+        std::cerr << "Could not query material buffer alignment." << std::endl;
+        return false;
+    }
+
+    const uint32_t alignment = limits.minUniformBufferOffsetAlignment;
+    m_uniformStride = static_cast<uint32_t>((sizeof(Uniforms) + alignment - 1) /
+                                            alignment * alignment);
+
     wgpu::BufferDescriptor uniformBufferDesc{};
     uniformBufferDesc.nextInChain = nullptr;
-    uniformBufferDesc.size = sizeof(Uniforms);
+    uniformBufferDesc.size = 2ull * m_uniformStride;
     uniformBufferDesc.label = "Uniforms buffer";
     uniformBufferDesc.mappedAtCreation = false;
     uniformBufferDesc.usage =
@@ -599,6 +634,8 @@ void Renderer::initBuffers() {
     lightBufferDesc.usage =
         wgpu::BufferUsage::CopyDst | wgpu::BufferUsage::Uniform;
     m_lightBuffer = m_device.CreateBuffer(&lightBufferDesc);
+
+    return true;
 }
 
 bool Renderer::uploadMeshResource(const Mesh& model, MeshResource& resource) {

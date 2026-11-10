@@ -1,6 +1,7 @@
 #pragma once
 
 #include <MeshResource.hpp>
+#include <Scene.hpp>
 #include <optional>
 
 #include "Camera.hpp"
@@ -26,7 +27,7 @@ class Renderer {
     bool initDevice();
     bool initQueue();
 
-    void initBuffers();
+    bool initBuffers();
     void initRenderPipeline(wgpu::ShaderModule shader);
     void initSampler();
     void initBindGroups();
@@ -39,7 +40,7 @@ class Renderer {
 
     wgpu::TextureView acquireSurfaceTextureView();
 
-    void draw(UILayer& ui, const Camera& camera, uint32_t meshId);
+    void draw(UILayer& ui, const Camera& camera, const Scene& scene);
 
     void drawJustUI(UILayer& ui);
 
@@ -84,6 +85,8 @@ class Renderer {
     wgpu::TextureDescriptor m_depthTextureDescriptor;
     wgpu::TextureViewDescriptor m_depthTextureViewDescriptor;
     wgpu::TextureFormat m_depthTextureFormat;
+
+    uint64_t m_uniformStride = 0;
 
    public:
     const wgpu::Instance& getInstance() const { return m_instance; }

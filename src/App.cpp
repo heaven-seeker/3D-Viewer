@@ -1,5 +1,7 @@
 #include "App.hpp"
 
+#include <glm/gtc/matrix_transform.hpp>
+
 #include "ResourceManager.hpp"
 #include "glfw3webgpu.h"
 #include "imgui.h"
@@ -47,7 +49,7 @@ bool App::initWebGPU() {
         "shader.wgsl", m_renderer.getDevice());
     if (!shader) return false;
 
-    m_renderer.initBuffers();
+    if (!m_renderer.initBuffers()) return false;
     m_renderer.initBindGroups();
     m_renderer.initRenderPipeline(shader);
 
@@ -154,6 +156,7 @@ void App::renderFrame() {
                         m_currentMeshId = *meshId;
                         m_appState = AppState::Viewing;
                         m_uiLayer.resetMaterialSelection();
+                        buildTestScene(*meshId);
                     } else {
                         std::cerr << "Incorrect mesh ID" << '\n';
                     }
@@ -178,6 +181,7 @@ void App::renderFrame() {
                     if (meshId) {
                         m_currentMeshId = *meshId;
                         m_uiLayer.resetMaterialSelection();
+                        buildTestScene(*meshId);
                     } else {
                         std::cerr << "Incorrect mesh ID" << '\n';
                     }
@@ -204,7 +208,7 @@ void App::renderFrame() {
                 };
             }
 
-            m_renderer.draw(m_uiLayer, m_camera, *m_currentMeshId);
+            m_renderer.draw(m_uiLayer, m_camera, m_scene);
             break;
         }
     }
@@ -262,6 +266,21 @@ float App::getDeltaTime() const {
     lastFrame = currentFrame;
 
     return deltaTime;
+}
+
+void App::buildTestScene(uint32_t meshId) {
+    m_scene.objects.clear();
+
+    SceneObject obj1 = {};
+    obj1.meshId = meshId;
+    obj1.model = glm::mat4(1.0f);
+
+    SceneObject obj2 = {};
+    obj2.meshId = meshId;
+    obj2.model = glm::translate(glm::mat4(1.0f), glm::vec3(5.0f, 0.0f, 0.0f));
+
+    m_scene.objects.push_back(obj1);
+    m_scene.objects.push_back(obj2);
 }
 
 }  // namespace C2Lux
